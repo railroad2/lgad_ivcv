@@ -1,12 +1,9 @@
 import numpy as np
-import time
-
-import numpy as np
-import pylab as plt
 import pyvisa
 
-class WayneKerr4300():
+from gpibbase import GPIBBase
 
+class WayneKerr4300():
     def __init__(self, rname=None):
         if rname is not None: 
             self.open(rname)

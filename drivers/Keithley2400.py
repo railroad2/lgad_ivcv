@@ -1,64 +1,84 @@
 import numpy as np
-import time
-
-import numpy as np
-import pylab as plt
 import pyvisa
 
-class KeithleySMU():
-    inst = []
-    onoff = 0
-    delay = 0.005
+from gpibbase import GPIBBase
 
-    def __init__(self, rname):
+class Keithley2400(GPIBBase):
+    _delay = 0.005
+
+    def __init__(self, rname=None):
+         
+        if rname is not None: 
+            self.open(rname)
+
+    def open(self, rname):
         rm = pyvisa.ResourceManager()
-        self.inst = rm.open_resource(rname)
-        idn = self.inst.query("*IDN?")
-        if '24' not in idn:
+        self._inst = rm.open_resource(rname)
+
+        if '24' not in self.get_idn:
             print ('Incorrect device is assigned...')
-            self.inst = []
-            return 
-            
-        self.initialize()
+            self._inst = []
+
+            return -1
+
+        return 0
     
-    def print_name(self):
-        print(self.inst.query("*IDN?"))
-
-    def reset(self):
-        self.onoff = 0
-        self.inst.write("*RST")
-
     def initialize(self):
         self.onoff = 0
-        self.inst.write("*RST")
-        self.inst.write(":SOUR:VOLT:MODE FIXED")
-        self.inst.write(":SOUR:VOLT:RANG 1000")
-        self.inst.write(":SOUR:VOLT:LEV 0")
-        self.inst.write(":SENS:CURR:PROT 100E-6")
-        self.inst.write(":SENS:FUNC \"VOLT\"")
-        self.inst.write(":SENS:FUNC \"CURR\"")
-        #self.inst.write(":SENS:CURR:RANG AUTO")
-        self.inst.write(":FORM:ELEM VOLT,CURR")
+        self.write(":SOUR:VOLT:MODE FIXED")
+        self.write(":SENS:FUNC \"VOLT\"")
+        self.write(":SENS:FUNC \"CURR\"")
+        self.write(":FORM:ELEM VOLT,CURR")
 
-    def read(self):
-        val = self.inst.query(":READ?")
-        val = val.strip()
-        val = val.split(',') 
-        val = [float(v) for v in val]
-        return val
+        self.set_voltage_range(1000)
+        self.set_current_limit(10E-6)
+        self.set_voltage(0)
+        
+    ## get functions 
+    def get_voltage(self):
+        return float(self._inst.query(":SOUR:VOLT:LEV?"))
 
-    def set_source_volt(self, volt):
-        self.inst.write(f":SOUR:VOLT:LEV {volt}")
-        time.sleep(self.delay)
+    def get_output(self):
+        return self.query(":OUTP?")
 
-    def output_on(self):
-        self.inst.write("OUTP ON")
-        self.onoff = 1
+    def get_current_limit(self):
+        return self.query(":SENS:CURR:PROT?")
 
-    def output_off(self):
-        self.inst.write("OUTP OFF")
-        self.onoff = 0
+    def get_voltage_range(self):
+        return self.query(":SOUR:VOLT:RANG?")
 
+    ## set functions
+    def set_voltage_range(self, V):
+        self.write(f":SOUR:VOLT:RANG {V}")
+        return 0
+
+    def set_current_limit(self, I):
+        self.write(f":SENS:CURR:PROT {I}")
+        return 0
+
+    def set_voltage(self, volt):
+        self.write(f":SOUR:VOLT:LEV {volt}")
+        self.sleep()
+
+    def set_output(self, onoff):
+        if onoff:
+            self.write(":OUTP ON")
+        else:
+            self.write(":OUTP OFF")
+
+        self.sleep()
+
+    def set_source_voltage_ramp(self, v1):
+        v0 = get_source_voltage()
+        varr = np.arange(v0, v1, 1)
+
+        for v in varr:
+            self.set_source_voltage(v) 
+        
+        self.set_source_voltage(v1)
+            
+
+    """
     def measure_IV(self, vstart, vstop, npts=11, navg=1, ofname=None, reverse=True, rtplot=True):
         vset_arr = np.linspace(vstart, vstop, npts)
         if reverse:
@@ -142,4 +162,5 @@ class KeithleySMU():
 
         if show:
             plt.show()
+        """
 

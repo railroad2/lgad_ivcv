@@ -16,10 +16,12 @@ class Keithley2400(InstBase):
             self._verify_msg = verify_msg
 
         if rname:
-            self.open(rname, self._read_termination)
+            self.open(rname, 
+                      read_termination=self._read_termination)
     
     def initialize(self):
         self.onoff = 0
+        self.set_output('off')
         self.write(":SOUR:VOLT:MODE FIXED")
         self.write(":SENS:FUNC \"VOLT\"")
         self.write(":SENS:FUNC \"CURR\"")
@@ -27,7 +29,9 @@ class Keithley2400(InstBase):
 
         self.set_voltage_range(1000)
         self.set_current_limit(10E-6)
+        self.sleep(0.5)
         self.set_voltage(0)
+
         return
         
     ## get functions 
@@ -72,15 +76,16 @@ class Keithley2400(InstBase):
         return
 
     def set_source_voltage_ramp(self, v1, step=1):
+        self.sleep()
         v0 = self.get_voltage()
 
         if (v1 - v0 > step):
             varr = np.arange(v0, v1, step)
 
             for v in varr:
-                self._set_source_voltage(v) 
+                self._set_voltage(v) 
 
-        self._set_source_voltage(v1)
+        self._set_voltage(v1)
         return
             
 

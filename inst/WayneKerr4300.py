@@ -5,10 +5,11 @@ from .instbase import InstBase
 
 
 class WayneKerr4300(InstBase):
+    _delay = 0.1
     _read_termination = '\n'
-    _verify_msg = "WAYNE KERR, 43100"
+    _verify_msg = "WAYNE KERR, 43"
 
-    def __init__(self, rname=None, _read_termination=None, verify_msg=None):
+    def __init__(self, rname=None, read_termination=None, verify_msg=None):
         if read_termination:
             self._read_termination = read_termination
 
@@ -18,24 +19,26 @@ class WayneKerr4300(InstBase):
         if rname:
             self.open(rname, self._read_termination)
 
+        self._inst.write_termination = self._read_termination
+
     def initialize(self):
         self.onoff = 0
-        self.reset()
         self.write(':MEAS:NUM-OF-TEST 1')
         self.write(':MEAS:FUNC1 C')
         self.write(':MEAS:FUNC2 R')
         self.write(':MEAS:LEV 0.1')
         self.write(':MEAS:EQU-CCT PAR')
         self.write(':MEAS:SPEED MED')
+        self.sleep(1)
 
     def measure(self):
         self.sleep()
-        val = self.query("meas:trig?")
+        val = self.query("MEAS:TRIG?")
         val = self.parse(val)
         return val
 
     def read_lcr(self):
-        return self._inst.query("MEAS:TRIG?")
+        return self._inst.query("MEAS:RES?")
          
     ## set functions
     def set_freq(self, freq):

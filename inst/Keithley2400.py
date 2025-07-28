@@ -31,6 +31,7 @@ class Keithley2400(InstBase):
         self.set_current_limit(10E-6)
         self.sleep(0.5)
         self.set_voltage(0)
+        self.front_rear('rear')
 
         return
         

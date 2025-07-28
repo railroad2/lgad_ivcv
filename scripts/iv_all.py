@@ -49,7 +49,7 @@ def off_all():
 
 def measure_all():
     iv = IVMeasurement() 
-    iv.base_path = "../result/"
+    iv.base_path = "../../result/"
     iv.base_path += f"{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
     off_all()
 

@@ -55,17 +55,17 @@ class Measurement:
         self.out_dir_path = os.path.join(self.base_path, f'{dir_name}')
         mkdir(self.out_dir_path)
 
-    def make_out_file_name(self):
+    def make_out_file_name(self, prefix="IV"):
         separator = ','
 
         if separator in self.sensor_name:
             sensor_name, descr = self.sensor_name.split(separator, 1)
             # FIXME use different prefix for IV and CV
-            file_name = (f'IV_{sensor_name}_{descr}_{self.date}'
-                         f'_row{self.row_number}_col{self.col_number}')
+            file_name = (f'{prefix}_{sensor_name}_{descr}_{self.date}'
+                         f'_row{self.row_number:02d}_col{self.col_number:02d}')
         else:
-            file_name = (f'IV_{self.sensor_name}_{self.date}'
-                         f'_row{self.row_number}_col{self.col_number}')
+            file_name = (f'{prefix}_{self.sensor_name}_{self.date}'
+                         f'_row{self.row_number:02d}_col{self.col_number:02d}')
         return file_name
 
     def get_unique_file_path(self, file_name, extension='.txt'):

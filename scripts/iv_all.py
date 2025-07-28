@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import datetime
 import numpy as np
 
 sys.path.append( os.path.dirname(os.path.abspath( os.path.dirname(os.path.abspath( os.path.dirname(__file__))))))
@@ -15,12 +16,12 @@ usb = usbcomm.USBComm(port)
 smu_rsrc = 'ASRL/dev/ttyUSB0'
 pau_rsrc = 'ASRL/dev/ttyUSB3'
 
-sname = 'looptest'
+sname = 'w5a'
 
 v0 = 0
-v1 = -10
+v1 = -40
 dv = 1
-Icomp = 1e-5
+Icomp = 2e-4
 return_swp = False
 
 def pinstat_all():
@@ -48,7 +49,8 @@ def off_all():
 
 def measure_all():
     iv = IVMeasurement() 
-    iv.base_path = "./"
+    iv.base_path = "../result/"
+    iv.base_path += f"{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
     off_all()
 
     # loop over switches

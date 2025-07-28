@@ -53,7 +53,7 @@ def measure_all():
     iv.base_path += f"{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
     off_all()
 
-    # loop over switches
+    # loop over all the switches
     rows = np.arange(2)
     cols = np.arange(2)
 
@@ -71,8 +71,34 @@ def measure_all():
 
     return
 
-def main():
-    measure_all()
+def measure_coord(coords):
+    iv = IVMeasurement() 
+    iv.base_path = "../result/"
+    iv.base_path += f"{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
+    off_all()
+
+    for row, col in coords:
+        on(row, col)
+        print (pinstat_all()) 
+        iv.initialize_measurement(smu_rsrc, pau_rsrc, sname )
+        iv.set_measurement_options(v0, v1, dv, Icomp, return_swp, col, row, False)
+        iv.start_measurement()
+        iv.measurement_thread.join()
+        off(row, col)
+        print (pinstat_all()) 
+        time.sleep(0.5)
+
+    return
+
+def all_channel():
+    cols, rows = np.meshgrid(np.arange(16), np.arange(16)
+    coords = np.array([rows.flatten(), cols.flatten()]).T
+    measure_coord(coords)
+
+def selected_channel():
+    coord = [(0,0)] 
+    measure_coord(coords)
 
 if __name__=="__main__":
     main()
+

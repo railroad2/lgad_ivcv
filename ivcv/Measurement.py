@@ -1,9 +1,9 @@
 import os
 import re
-from util.util import mkdir, getdate, round_to_significant_figures
+from ..util.util import mkdir, getdate, round_to_significant_figures
 import matplotlib.pyplot as plt
 import numpy as np
-from util.threading import Event
+from threading import Event
 
 
 class Measurement:
@@ -61,11 +61,11 @@ class Measurement:
         if separator in self.sensor_name:
             sensor_name, descr = self.sensor_name.split(separator, 1)
             # FIXME use different prefix for IV and CV
-            file_name = (f'IV_SMU+PAU_{sensor_name}_{descr}_{self.date}'
-                         f'_col{self.col_number}_row{self.row_number}')
+            file_name = (f'IV_{sensor_name}_{descr}_{self.date}'
+                         f'_row{self.row_number}_col{self.col_number}')
         else:
-            file_name = (f'IV_SMU+PAU_{self.sensor_name}_{self.date}'
-                         f'_col{self.col_number}_row{self.row_number}')
+            file_name = (f'IV_{self.sensor_name}_{self.date}'
+                         f'_row{self.row_number}_col{self.col_number}')
         return file_name
 
     def get_unique_file_path(self, file_name, extension='.txt'):

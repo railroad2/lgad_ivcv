@@ -56,11 +56,11 @@ class Keithley2400(InstBase):
         self.write(f":SENS:CURR:PROT {I}")
         return
 
-    def set_voltage(self, volt):
+    def _set_voltage(self, volt):
         self.set_source_voltage_ramp(volt)
         return
 
-    def _set_voltage(self, volt):
+    def set_voltage(self, volt):
         self.write(f":SOUR:VOLT:LEV {volt}")
         self.sleep()
         return
@@ -76,16 +76,16 @@ class Keithley2400(InstBase):
         return
 
     def set_source_voltage_ramp(self, v1, step=1):
-        self.sleep()
+        self.sleep(1)
         v0 = self.get_voltage()
 
         if (v1 - v0 > step):
             varr = np.arange(v0, v1, step)
 
             for v in varr:
-                self._set_voltage(v) 
+                self.set_voltage(v) 
 
-        self._set_voltage(v1)
+        self.set_voltage(v1)
         return
             
 

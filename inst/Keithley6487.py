@@ -49,6 +49,7 @@ class Keithley6487(InstBase):
         self.write("INIT")  # TODO check without this line
         self.write("CURR:RANG:AUTO OFF")
         self.write("CURR:RANG 2e-6")  # for probecard test
+        self.write("SENS:CURR:NPLC 1")
         self.write("SYST:ZCH OFF")
         return
 

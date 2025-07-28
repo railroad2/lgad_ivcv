@@ -1,8 +1,12 @@
-from inst.Keithley2400 import Keithley2400
-from inst.Keithley6487 import Keithley6487
+import sys
+sys.path.append('/home/kmlee/work/lgad/')
+
+from ..inst.Keithley2400 import Keithley2400
+from ..inst.Keithley6487 import Keithley6487
 import numpy as np
 import time
-from util import BaseThread, parse_voltage_steps
+from ..util.thread import BaseThread 
+from ..util.util   import parse_voltage_steps
 from .Measurement import Measurement
 
 
@@ -64,7 +68,12 @@ class IVMeasurement(Measurement):
             raise Exception('Positive voltages not allowed.')
 
         # print(voltage_step)
-        self.voltage_step, self.ranges_with_steps = parse_voltage_steps(voltage_step)
+        if type(voltage_step) in (int, float):
+            self.voltage_step = voltage_step
+            self.ranges_with_steps = [(self.initial_voltage, self.final_voltage, self.voltage_step)]
+        else:
+            self.voltage_step, self.ranges_with_steps = parse_voltage_steps(voltage_step)
+
         # print(self.voltage_step, self.ranges_with_steps)
         self.current_compliance = current_compliance
         self.return_sweep = return_sweep

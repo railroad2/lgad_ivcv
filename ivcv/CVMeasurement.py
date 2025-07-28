@@ -1,5 +1,5 @@
-from Inst.Keithley6487 import Keithley6487
-from Inst.WayneKerr4300 import WayneKerr4300
+from inst.Keithley6487 import Keithley6487
+from inst.WayneKerr4300 import WayneKerr4300
 
 import sys
 import numpy as np

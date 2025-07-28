@@ -1,5 +1,5 @@
-from Inst.Keithley2400 import Keithley2400
-from Inst.Keithley6487 import Keithley6487
+from inst.Keithley2400 import Keithley2400
+from inst.Keithley6487 import Keithley6487
 import numpy as np
 import time
 from util import BaseThread, parse_voltage_steps

@@ -1,5 +1,5 @@
 #
-from . import Inst
-from . import Ivcv
-from . import Util
+from . import inst
+from . import ivcv
+from . import util
 

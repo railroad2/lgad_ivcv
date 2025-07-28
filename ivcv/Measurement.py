@@ -1,9 +1,9 @@
 import os
 import re
-from Util.util import mkdir, getdate, round_to_significant_figures
+from util.util import mkdir, getdate, round_to_significant_figures
 import matplotlib.pyplot as plt
 import numpy as np
-from Util.threading import Event
+from util.threading import Event
 
 
 class Measurement:

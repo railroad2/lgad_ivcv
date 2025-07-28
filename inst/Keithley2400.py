@@ -93,4 +93,12 @@ class Keithley2400(InstBase):
         self.set_voltage(v1)
         return
             
-
+    def front_rear(self, opt):
+        if opt.lower() == 'front':
+            self.write(':ROUT:TERM FRONT')
+        elif opt.lower() == 'rear':
+            self.write(':ROUT:TERM REAR')
+        else:
+            print ('Invalid option for front_rear() function')
+            return -1
+            

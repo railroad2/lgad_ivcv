@@ -1,14 +1,15 @@
+import os
 import sys
 import time
 import numpy as np
 
-sys.path.append('/home/kmlee/work/lgad')
+sys.path.append( os.path.dirname(os.path.abspath( os.path.dirname(os.path.abspath( os.path.dirname(__file__))))))
 
 import lgad_ivcv
 from lgad_ivcv.util import usbcomm
 from lgad_ivcv.ivcv.IVMeasurement import IVMeasurement
 
-port = '/dev/ttyACM1'
+port = '/dev/ttyACM0'
 usb = usbcomm.USBComm(port)
 
 smu_rsrc = 'ASRL/dev/ttyUSB0'
@@ -17,10 +18,10 @@ pau_rsrc = 'ASRL/dev/ttyUSB3'
 sname = 'looptest'
 
 v0 = 0
-v1 = 0 #-10
+v1 = -10
 dv = 1
 Icomp = 1e-5
-return_swp = True
+return_swp = False
 
 def pinstat_all():
     pinstat = usb.send_data('PINSTAT ALL')
@@ -39,13 +40,15 @@ def off(row, col):
     print (recv)
 
 def off_all():
+    stat = pinstat_all()
     for i in range(16):
         for j in range(16):
-            off(i, j)
-    
+            if stat[i][j] == 1:
+                off(i, j)
 
 def measure_all():
     iv = IVMeasurement() 
+    iv.base_path = "./"
     off_all()
 
     # loop over switches

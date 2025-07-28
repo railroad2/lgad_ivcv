@@ -127,7 +127,7 @@ class IVMeasurement(Measurement):
     def save_results(self):
         if self.resources_closed is False:
 
-            self.smu.set_voltage(0)
+            self.smu.set_voltage_ramp(0)
             self.smu.set_output('off')
             self.smu.close()
             self.pau.close()

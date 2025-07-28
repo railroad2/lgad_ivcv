@@ -5,24 +5,18 @@ from .instbase import InstBase
 
 
 class WayneKerr4300(InstBase):
-    def __init__(self, rname=None):
-        if rname is not None: 
-            self.open(rname)
-    
-    def open(self, rname):
-        rm = pyvisa.ResourceManager()
-        self._inst = rm.open_resource(rname)
-        if ('USB' in rname) or ('usb' in rname):
-            self._inst.read_termination = '\n'
-            self._inst.write_termination = '\n'
+    _read_termination = '\n'
+    _verify_msg = "WAYNE KERR, 43100"
 
-        if 'WAYNE' not in self.get_idn():
-            print ('An incorrect device has been assigned...')
-            self.inst = []
-            return -1
-    
-    def close(self):
-        self._inst.close()
+    def __init__(self, rname=None, _read_termination=None, verify_msg=None):
+        if read_termination:
+            self._read_termination = read_termination
+
+        if verify_msg:
+            self._verify_msg = verify_msg
+
+        if rname:
+            self.open(rname, self._read_termination)
 
     def initialize(self):
         self.onoff = 0

@@ -5,11 +5,26 @@ import pyvisa
 class InstBase:
     _inst = []
     _delay = 0.005
+    _read_termination='\r'
+    _verify_msg=''
 
-    def open(self, rname):
+    def open(self, rname, read_termination=self._read_termination)
         rm = pyvisa.ResourceManager()
-        self._inst = rm.open_resource(rname)
+        self._inst = rm.open_resource(rname, read_termination=read_termination)
+        self.verify_inst(self._verify_msg)
 
+    def verify_inst(self, msg):
+        if msg not in self.get_idn():
+            print ('An incorrect device has been assigned...')
+            self._inst = []
+            return -1
+
+        return 0
+
+    def close(self):
+        self._inst.close()
+        return
+        
     def get_idn(self):
         return self._inst.query("*IDN?")
 

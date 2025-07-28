@@ -5,29 +5,19 @@ from .instbase import InstBase
 
 
 class Keithley2400(InstBase):
-    _delay = 0.005
+    _read_termination = '\r'
+    _verify_msg = "KEITHLEY INSTRUMENTS INC.,MODEL 24"
 
-    def __init__(self, rname=None):
-         
-        if rname is not None: 
-            self.open(rname)
+    def __init__(self, rname=None, read_termination=None, verify_msg=None):
+        if read_termination:
+            self._read_termination = read_termination
 
-    def open(self, rname):
-        rm = pyvisa.ResourceManager()
-        self._inst = rm.open_resource(rname)
+        if verify_msg:
+            self._verify_msg = verify_msg
 
-        if '24' not in self.get_idn():
-            print ('An incorrect device has been assigned...')
-            self._inst = []
-
-            return -1
-
-        return 
+        if rname:
+            self.open(rname, self._read_termination)
     
-    def close(self):
-        self._inst.close()
-        return
-   
     def initialize(self):
         self.onoff = 0
         self.write(":SOUR:VOLT:MODE FIXED")

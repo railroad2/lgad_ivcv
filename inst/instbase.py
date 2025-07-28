@@ -10,7 +10,7 @@ class InstBase:
 
     def open(self, rname, read_termination=None):
         if read_termination:
-            self._read_termination = read_termnation
+            self._read_termination = read_termination
         rm = pyvisa.ResourceManager()
         self._inst = rm.open_resource(rname, read_termination=read_termination)
         self.verify_inst(self._verify_msg)

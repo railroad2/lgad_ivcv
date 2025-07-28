@@ -100,6 +100,13 @@ class IVMeasurement(Measurement):
         current_pau = float(current_pau[:-1])
         # print(voltage, voltage_smu, current_smu, current_pau)  # TODO use verbose level
 
+        while (abs(current_pau) > 1e30): # overflow - TODO polish this part
+            print ('overflow')
+            range1 = float(self.pau.get_current_range())
+            self.pau.set_current_range(range1*10)
+            current_pau, _, _ = self.pau.read().split(',')
+            current_pau = float(current_pau[:-1])
+
         self.measurement_arr.append([voltage, voltage_smu, current_smu, current_pau])
         self.output_arr.append([voltage, current_pau, current_smu])
         # self.output_arr.append([voltage, current_smu])

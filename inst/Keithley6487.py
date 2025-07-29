@@ -33,7 +33,6 @@ class Keithley6487(InstBase):
 
         self.write("CURR:RANG:AUTO OFF")
         self.write("SYST:ZCH OFF")
-        return
 
     def initialize_full(self):  # use this for CV measuremnet, not clear why
         self.reset()
@@ -41,7 +40,6 @@ class Keithley6487(InstBase):
         self.write("SOUR:VOLT:STAT OFF")
         self.write("SOUR:VOLT:RANG 500")
         self.write("FORM:ELEM READ,UNIT,STAT,VSO")
-        return
 
     def initialize(self):
         self.reset()
@@ -53,24 +51,20 @@ class Keithley6487(InstBase):
         self.write("SYST:AZER OFF")
         self.write("SYST:ZCH OFF")
         self.sleep(0.5)
-        return
 
     def get_current_range(self):
-        self.query("CURR:RANGE?")
-        return
+        val = self.query("CURR:RANGE?")
+        return val
     
     def set_voltage(self, V):
         self.write(f":SOUR:VOLT {V}")
         self.sleep()
-        return
 
     def set_current_range(self, I):
         self.write(f"CURR:RANGE {I}")
-        return
 
     def set_current_limit(self, I):
         self.write(f":SOUR:VOLT:ILIM {I}")
-        return 0
 
     def set_output(self, onoff):
         if onoff=='on' or onoff=='On' or onoff=='ON':
@@ -80,5 +74,4 @@ class Keithley6487(InstBase):
         else:
             print('Please input \'on\' or \'off\'')
         self.sleep()
-        return
 

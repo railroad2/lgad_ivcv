@@ -32,12 +32,11 @@ class Keithley2400(InstBase):
         self.sleep(0.5)
         self.set_voltage(0)
         self.front_rear('rear')
-
-        return
         
     ## get functions 
     def get_voltage(self):
-        return float(self._inst.query(":SOUR:VOLT:LEV?"))
+        val = float(self._inst.query(":SOUR:VOLT:LEV?"))
+        return val
 
     def get_output(self):
         return self.query(":OUTP?")
@@ -51,20 +50,16 @@ class Keithley2400(InstBase):
     ## set functions
     def set_voltage_range(self, V):
         self.write(f":SOUR:VOLT:RANG {V}")
-        return
 
     def set_current_limit(self, I):
         self.write(f":SENS:CURR:PROT {I}")
-        return
 
     def _set_voltage(self, volt):
         self.set_voltage_ramp(volt)
-        return
 
     def set_voltage(self, volt):
         self.write(f":SOUR:VOLT:LEV {volt}")
         self.sleep()
-        return
 
     def set_output(self, onoff):
         if onoff=='on' or onoff=='On' or onoff=='ON':
@@ -74,7 +69,6 @@ class Keithley2400(InstBase):
         else:
             print('Please input \'on\' or \'off\'')
         self.sleep()
-        return
 
     def set_voltage_ramp(self, v1, step=1):
         self.sleep()
@@ -92,7 +86,6 @@ class Keithley2400(InstBase):
             self.sleep()
 
         self.set_voltage(v1)
-        return
             
     def front_rear(self, opt):
         if opt.lower() == 'front':

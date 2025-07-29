@@ -74,7 +74,6 @@ class InstBase:
 
     def close(self):
         self._inst.close()
-        return
         
     def get_idn(self):
         return self._inst.query("*IDN?")
@@ -90,7 +89,6 @@ class InstBase:
 
     def write(self, line):
         self._inst.write(line)
-        return
 
     def sleep(self, delay=None):
         if delay:

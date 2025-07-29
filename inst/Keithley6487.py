@@ -50,7 +50,9 @@ class Keithley6487(InstBase):
         self.write("CURR:RANG:AUTO OFF")
         self.write("CURR:RANG 2e-6")  # for probecard test
         self.write("SENS:CURR:NPLC 1")
+        self.write("SYST:AZER OFF")
         self.write("SYST:ZCH OFF")
+        self.sleep(0.5)
         return
 
     def get_current_range(self):

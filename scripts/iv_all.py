@@ -13,15 +13,16 @@ from lgad_ivcv.ivcv.IVMeasurement import IVMeasurement
 port = '/dev/ttyACM0'
 usb = usbcomm.USBComm(port)
 
-smu_rsrc = 'ASRL/dev/ttyUSB0'
+smu_rsrc = 'ASRL/dev/ttyUSB2'
 pau_rsrc = 'ASRL/dev/ttyUSB3'
 
-sname = 'w5a'
+sname = 'w5a_higher'
+basepath = f"../../result/{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
 
 v0 = 0
 v1 = -40
 dv = 1
-Icomp = 2e-4
+Icomp = 3e-4
 return_swp = False
 
 def pinstat_all():
@@ -49,8 +50,7 @@ def off_all():
 
 def measure_all():
     iv = IVMeasurement() 
-    iv.base_path = "../../result/"
-    iv.base_path += f"{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
+    iv.base_path = basepath
     off_all()
 
     # loop over all the switches
@@ -73,8 +73,8 @@ def measure_all():
 
 def measure_coord(coords):
     iv = IVMeasurement() 
-    iv.base_path = "../result/"
-    iv.base_path += f"{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
+    iv.base_path = basepath
+    print (iv.base_path)
     off_all()
 
     for row, col in coords:
@@ -90,14 +90,44 @@ def measure_coord(coords):
 
     return
 
+def measure_channel(channels):
+    iv = IVMeasurement() 
+    iv.base_path = basepath
+    print (iv.base_path)
+    off_all()
+
+    for nch in channels:
+        row = nch // 16
+        col = nch % 16
+        on(row, col)
+        print (pinstat_all()) 
+        iv.initialize_measurement(smu_rsrc, pau_rsrc, sname )
+        iv.set_measurement_options(v0, v1, dv, Icomp, return_swp, col, row, False)
+        iv.start_measurement()
+        iv.measurement_thread.join()
+        off(row, col)
+        print (pinstat_all()) 
+        time.sleep(0.5)
+
+    return
+
 def all_channel():
-    cols, rows = np.meshgrid(np.arange(16), np.arange(16)
+    cols, rows = np.meshgrid(np.arange(16), np.arange(16))
     coords = np.array([rows.flatten(), cols.flatten()]).T
     measure_coord(coords)
 
-def selected_channel():
-    coord = [(0,0)] 
+def selected_coords():
     measure_coord(coords)
+
+def selected_channels():
+    channels = np.arange(13*16+12, 256)
+    measure_channel(channels)
+
+def main():
+    selected_channels()
+    #all_channel()
+
+
 
 if __name__=="__main__":
     main()

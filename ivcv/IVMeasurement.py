@@ -1,13 +1,14 @@
 import sys
+import time
 sys.path.append('/home/kmlee/work/lgad/')
 
+import numpy as np
+
+from .Measurement  import Measurement
 from ..inst.Keithley2400 import Keithley2400
 from ..inst.Keithley6487 import Keithley6487
-import numpy as np
-import time
 from ..util.thread import BaseThread 
 from ..util.util   import parse_voltage_steps
-from .Measurement import Measurement
 
 
 class IVMeasurement(Measurement):
@@ -31,7 +32,7 @@ class IVMeasurement(Measurement):
         self.x_axis_label = 'Bias Voltage (V)'
         self.y_axis_label = 'Current (I)'
 
-        self.out_txt_header = 'Vsmu(V)\tIsmu(A)\tIpau(A)'
+        self.out_txt_header = 'Vinput(V)\tVsmu(V)\tIsmu(A)\tIpau(A)'
         self.base_path += r'/I-V_test'
 
     def initialize_measurement(self, smu_visa_resource_name=None, pau_visa_resource_name=None, sensor_name=None):
@@ -50,12 +51,16 @@ class IVMeasurement(Measurement):
             self.smu.initialize()
             self.smu.set_voltage(0)
             self.smu.set_voltage_range(200)
+        else:
+            self.smu = None
 
         if pau_visa_resource_name:
             self.pau_visa_resouce_name = pau_visa_resource_name
             self.pau = Keithley6487()
             self.pau.open(self.pau_visa_resouce_name)
             self.pau.initialize()
+        else:
+            self.pau = None
 
         self.resources_closed = False
 
@@ -86,26 +91,34 @@ class IVMeasurement(Measurement):
         self.smu.set_voltage(0)
         self.smu.set_output('off')
         self.smu.close()
-        self.pau.close()
+        if (self.pau):
+            self.pau.close()
         self.resources_closed = True
         print("WARNING: Please make sure the output is turned off!")
         # exit(1)
 
-    def _update_measurement_array(self, voltage, index, is_forced_return=False):
+    def _update_measurement_array(self, voltage, index, is_forced_return=False, verbose=0):
         self.smu.set_voltage(voltage)
+
         voltage_smu, current_smu = self.smu.read().split(',')
-        current_pau, _, _ = self.pau.read().split(',')
         voltage_smu = float(voltage_smu)
         current_smu = float(current_smu)
-        current_pau = float(current_pau[:-1])
-        # print(voltage, voltage_smu, current_smu, current_pau)  # TODO use verbose level
+
+        if (self.pau):
+            current_pau, _, _ = self.pau.read().split(',')
+            current_pau = float(current_pau[:-1])
+        else:
+            current_pau = 0
 
         while (abs(current_pau) > 1e30): # overflow - TODO polish this part
-            print ('overflow')
+            print ('Overflow in picoammeter')
             range1 = float(self.pau.get_current_range())
             self.pau.set_current_range(range1*10)
             current_pau, _, _ = self.pau.read().split(',')
             current_pau = float(current_pau[:-1])
+
+        if (verbose > 0):
+            print(voltage, voltage_smu, current_smu, current_pau)  # TODO use verbose level
 
         self.measurement_arr.append([voltage, voltage_smu, current_smu, current_pau])
         self.output_arr.append([voltage, current_pau, current_smu])
@@ -136,7 +149,8 @@ class IVMeasurement(Measurement):
             self.smu.set_voltage_ramp(0)
             self.smu.set_output('off')
             self.smu.close()
-            self.pau.close()
+            if (self.pau):
+                self.pau.close()
             self.resources_closed = True
 
             file_name = self.make_out_file_name()

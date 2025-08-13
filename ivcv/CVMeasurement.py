@@ -1,19 +1,21 @@
-from inst.Keithley6487 import Keithley6487
-from inst.WayneKerr4300 import WayneKerr4300
-
 import sys
-import numpy as np
 import time
-from util import BaseThread, parse_voltage_steps
-from .Measurement import Measurement
+
+import numpy as np
 import matplotlib.pyplot as plt
+
+from .Measurement  import Measurement
+from ..inst.Keithley6487  import Keithley6487
+from ..inst.WayneKerr4300 import WayneKerr4300
+from ..util.thread import BaseThread
+from ..util.util   import parse_voltage_steps
 
 
 CURRENT_COMPLIANCE = 10e-6
 
 
 class CVMeasurement(Measurement):
-    def __init__(self, pau_visa_resource_name=None, lcr_visa_resource_name=None, sensor_name=None):
+    def __init__(self, lcr_visa_resource_name=None, pau_visa_resource_name=None, sensor_name=None):
         super(CVMeasurement, self).__init__()
 
         self.pau = None
@@ -66,11 +68,22 @@ class CVMeasurement(Measurement):
 
         self.initial_voltage = initial_voltage
         self.final_voltage = final_voltage
+
         if self.initial_voltage > 0 or self.final_voltage > 0:
             raise Exception('Positive voltages not allowed.')
 
+        if not self.pau:
+            if self.final_voltage < -40:
+                self.final_voltage = 40
+                print ('The bias from the LCR meter is limited to 40 V.')
+
         # print(voltage_step)
-        self.voltage_step, self.ranges_with_steps = parse_voltage_steps(voltage_step)
+        if type(voltage_step) in (int, float):
+            self.voltage_step = voltage_step
+            self.ranges_with_steps = [(self.initial_voltage, self.final_voltage, self.voltage_step)]
+        else:
+            self.voltage_step, self.ranges_with_steps = parse_voltage_steps(voltage_step)
+
         # print(self.voltage_step, self.ranges_with_steps)
         self.ac_level = ac_level
         self.frequency = frequency
@@ -99,7 +112,7 @@ class CVMeasurement(Measurement):
             print("Warning: positive bias is not allowed. Setting DC voltage to 0.")
             voltage = 0
         
-        if pau:
+        if self.pau:
             self.pau.set_voltage(voltage)
 
             try:
@@ -114,9 +127,11 @@ class CVMeasurement(Measurement):
         else:
             self.lcr.set_dc_voltage(voltage)
             voltage_out = voltage
+            current_pau = 0
 
-        _ = self.lcr.read_lcr()
-        capacitance, resistance = self.lcr.read_lcr().split(',')
+        #_ = self.lcr.measure()
+        res = self.lcr.measure()
+        capacitance, resistance = res
 
         try:
             capacitance = float(capacitance)
@@ -125,22 +140,24 @@ class CVMeasurement(Measurement):
             print("error in _measure()", type(exception).__name__)
 
         # print(voltage_pau, capacitance, resistance, current_pau)
-        self.measurement_arr.append([voltage_pau, capacitance, resistance, current_pau])
+        self.measurement_arr.append([voltage_out, capacitance, resistance, current_pau])
         self.output_arr.append([voltage_out, capacitance])
         self.set_status_str(index, is_forced_return)
 
     def start_measurement(self):
         self._make_voltage_array(self.initial_voltage, self.final_voltage)
 
-        if pau:
-            self.pau.set_current_limit(CURRENT_COMPLIANCE)
-            self.pau.set_voltage(0)
-            self.pau.set_output('ON')
-
         self.lcr.set_dc_voltage(0)
         self.lcr.set_level(self.ac_level)
         self.lcr.set_freq(self.frequency)
-        self.lcr.set_output('ON')
+
+        if self.pau:
+            self.pau.set_current_limit(CURRENT_COMPLIANCE)
+            self.pau.set_voltage(0)
+            self.pau.set_output('ON')
+        else:
+            self.lcr.set_output('ON') 
+
         time.sleep(1)
 
         self.event.clear()
@@ -190,11 +207,15 @@ class CVMeasurement(Measurement):
                   f"between {self.initial_voltage} and {self.final_voltage} ")
             print(f"   * Return sweep: {self.return_sweep}")
 
-            self.pau.set_output('OFF')
-            self.pau.close()
-            self.lcr.set_output('OFF')
-            self.lcr.set_dc_voltage(0)
-            self.lcr.close()
+            if self.pau:
+                self.pau.set_output('OFF')
+                self.pau.close()
+
+            if self.lcr:
+                self.lcr.set_output('OFF')
+                self.lcr.set_dc_voltage(0)
+                self.lcr.close()
+
             self.resources_closed = True
 
             file_name = self.make_out_file_name()

@@ -19,8 +19,6 @@ class WayneKerr4300(InstBase):
         if rname:
             self.open(rname, self._read_termination)
 
-        self._inst.write_termination = self._read_termination
-
     def initialize(self):
         self.onoff = 0
         self.write(':MEAS:NUM-OF-TEST 1')
@@ -33,19 +31,21 @@ class WayneKerr4300(InstBase):
 
     def measure(self):
         self.sleep()
-        val = self.query("MEAS:TRIG?")
+        val = self.query(":MEAS:TRIG?")
         val = self.parse(val)
         return val
 
     def read_lcr(self):
-        return self._inst.query("MEAS:RES?")
+        return self._inst.query(":MEAS:RES?")
          
     ## set functions
     def set_freq(self, freq):
         self.write(f":MEAS:FREQ {freq}")
+        self.sleep(0)
 
     def set_level(self, lev):
         self.write(f":MEAS:LEV {lev}")
+        self.sleep()
 
     def set_dc_voltage(self, volt):
         self.write(f":MEAS:V-BIAS {volt}V")
@@ -54,11 +54,14 @@ class WayneKerr4300(InstBase):
     def set_output(self, onoff):
         if onoff.lower() == 'on':
             self.write(":MEAS:BIAS ON")
+            self.sleep()
+            print ('LCR meter DC bias is turned on')
         elif onoff.lower() == 'off':
             self.write(":MEAS:BIAS OFF")
+            self.sleep()
+            print ('LCR meter DC bias is turned off')
         else:
             print("Please input 'on' or 'off'.")
-        self.sleep()
 
     ## get functions
     def get_freq(self):

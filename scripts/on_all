@@ -1,0 +1,11 @@
+#!/bin/bash
+
+tty=`ls /dev/ttyACM*`
+
+chs=`seq 0 255`
+
+
+for ch in ${chs}; do
+    echo "on ${ch}" > ${tty}
+    sleep 0.05
+done

@@ -13,7 +13,7 @@ def mkdir(path):
     except FileExistsError: 
         return 
     except FileNotFoundError:
-        mkdir(os.path.join(*path.split('/')[:-1]))
+        mkdir(os.path.join(os.path.split(path)[0]))
 
     mkdir(path)
     return

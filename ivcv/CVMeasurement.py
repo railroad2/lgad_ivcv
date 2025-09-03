@@ -15,14 +15,14 @@ CURRENT_COMPLIANCE = 10e-6
 
 
 class CVMeasurement(Measurement):
-    def __init__(self, lcr_visa_resource_name=None, pau_visa_resource_name=None, sensor_name=None):
+    def __init__(self, lcr_visa_resource=None, pau_visa_resource=None, sensor_name=None):
         super(CVMeasurement, self).__init__()
 
         self.pau = None
         self.lcr = None
         self.sensor_name = sensor_name
-        self.lcr_visa_resource_name = lcr_visa_resource_name
-        self.pau_visa_resource_name = pau_visa_resource_name
+        self.lcr_visa_resource = lcr_visa_resource
+        self.pau_visa_resource = pau_visa_resource
         self.initial_voltage = 0
         self.final_voltage = -60
         self.voltage_step = 1 
@@ -39,7 +39,7 @@ class CVMeasurement(Measurement):
         self.out_txt_header = 'Vpau(V)\tC(F)\tR(Ohm)\tIpau(A)'
         self.base_path += r'/C-V_test'
 
-    def initialize_measurement(self, lcr_visa_resource_name=None, pau_visa_resource_name=None, sensor_name=None):
+    def initialize_measurement(self, lcr_visa_resource=None, pau_visa_resource=None, sensor_name=None):
         if sensor_name:
             self.sensor_name = sensor_name
 
@@ -48,20 +48,44 @@ class CVMeasurement(Measurement):
         self.data_points = -1
         self._make_out_dir()
 
-        if lcr_visa_resource_name:
-            self.lcr_visa_resource_name = lcr_visa_resource_name
+        self.set_lcr(lcr_visa_resource)
+        self.set_pau(pau_visa_resource)
+
+        if self.lcr is not None:
+            self.resources_closed = False
+
+    def set_lcr(self, lcr_visa_resource=None):
+        if isinstance(lcr_visa_resource, WayneKerr4300):
+            self.lcr = lcr_visa_resource
+            self._initialize_lcr()
+        elif isinstance(lcr_visa_resource, str):
+            self.lcr_visa_resource = lcr_visa_resource
             self.lcr = WayneKerr4300()
-            self.lcr.open(self.lcr_visa_resource_name)
-            self.lcr.initialize()
-            self.lcr.set_dc_voltage(0)
+            self.lcr.open(self.lcr_visa_resouce)
+            self._initialize_lcr()
+        else:
+            print ('An invalid resouce is assigned for LCR.')
+            self.smu = None
 
-        if pau_visa_resource_name:
-            self.pau_visa_resource_name = pau_visa_resource_name
+    def _initialize_lcr(self):
+        self.lcr.initialize()
+        self.lcr.set_dc_voltage(0)
+          
+    def set_pau(self, pau_visa_resource=None):
+        if isinstance(pau_visa_resource, Keithley6487):
+            self.pau = pau_visa_resource
+            self._initialize_pau()
+        elif isinstance(pau_visa_resource, str):
+            self.pau_visa_resource= pau_visa_resource
             self.pau = Keithley6487()
-            self.pau.open(self.pau_visa_resource_name)
-            self.pau.initialize_full()
+            self.pau.open(self.pau_visa_resouce)
+            self._initialize_pau()
+        else:
+            print ('An invalid resouce is assigned for Picoammeter.')
+            self.pau = None
 
-        self.resources_closed = False
+    def _initialize_pau(self):
+        self.pau.initialize_full()
 
     def set_measurement_options(self, initial_voltage, final_voltage, voltage_step,
                                 ac_level, frequency, return_sweep, col_number, row_number, live_plot):
@@ -116,7 +140,7 @@ class CVMeasurement(Measurement):
             self.pau.set_voltage(voltage)
 
             try:
-                current_pau, stat_pau, voltage_pau = self.pau.read().split(',')
+                current_pau, stat_pau, voltage_pau = self.pau.read_autorange().split(',')
             except Exception as exception:
                 print(type(exception).__name__)
                 sys.exit(0)

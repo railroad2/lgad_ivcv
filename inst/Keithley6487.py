@@ -1,15 +1,19 @@
-import numpy as np
+import sys
 import time
+import numpy as np
 
 import numpy as np
 import pylab as plt
 import pyvisa
-from .instbase import InstBase
-
+from .instbase import InstBase, InstError
 
 class Keithley6487(InstBase):
     _read_termination = '\r'
     _verify_msg = "KEITHLEY INSTRUMENTS INC.,MODEL 6487"
+
+    current_range = 2e-6
+    min_range = 2e-9  # minimum range = 2 nA
+    max_range = 20e-3 # maximum range = 20 mA
 
     def __init__(self, rname=None, read_termination=None, verify_msg=None):
         if read_termination:
@@ -81,4 +85,45 @@ class Keithley6487(InstBase):
             print('Please input \'on\' or \'off\'')
         self.sleep()
         return
+
+
+    def read_autorange(self, attempts=10):
+        val = 0
+        last = np.nan
+        underflow_factor = 1e-4
+        overflow_threshold = 1e30
+
+        def _clip_and_set(new_r):
+            new_r = max(new_r, self.min_range)
+            new_r = min(new_r, self.max_range)
+            cur_r = self.current_range
+            if abs(new_r - cur_r) / max(cur_r, 1e-30) > 1e-6:
+                self.set_current_range(new_r)
+                self.sleep()
+                self.current_range = float(self.get_current_range())
+
+        for _ in range(attempts):
+            try:
+                raw = self.read()
+                val = raw.split(',', 1)[0].strip()
+
+                if val and val[-1].isalpha():
+                    val = val[:-1]
+
+                val = float(val)
+            except Exception as e:
+                raise InstError(f"Reading pau failed: {e}") from e
+
+            if abs(val) > overflow_threshold:
+                _clip_and_set(self.current_range * 10.0) 
+                last = raw
+            elif abs(val) < underflow_factor * self.current_range:
+                _clip_and_set(self.current_range * 0.10)
+                last = raw
+            else:
+                return raw
+
+        print ("Failed to obtain valid current range within attempts.", file=sys.stderr)   
+
+        return last
 

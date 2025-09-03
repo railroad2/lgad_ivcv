@@ -1,6 +1,8 @@
 import time
 import pyvisa
 
+class InstError(Exception):
+    pass
 
 class InstBase:
     _inst = []

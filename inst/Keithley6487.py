@@ -123,7 +123,7 @@ class Keithley6487(InstBase):
             else:
                 return raw
 
-        print ("Failed to obtain valid current range within attempts.", file=sys.stderr)   
+        print (f"Failed to obtain valid current range within {attempts} attempts.", file=sys.stderr)   
 
         return last
 

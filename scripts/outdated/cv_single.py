@@ -56,7 +56,7 @@ def find_inst():
     for l in lst:
         idn = get_idn(os.path.join(path, l)) 
 
-        if 'WAYNE KERR, 4310' in idn:
+        if 'WAYNE KERR, 43' in idn:
             lcr_rsrc = 'ASRL'+os.path.join(path, l)
             print (lcr_rsrc)
         elif 'KEITHLEY INSTRUMENTS INC.,MODEL 6487' in idn:
@@ -92,7 +92,7 @@ def just_measure(row, col):
 
 def main():
     find_inst()
-    just_measure(0,0)
+    #just_measure(0,0)
 
 
 if __name__=="__main__":

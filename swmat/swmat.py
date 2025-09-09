@@ -1,20 +1,27 @@
 import numpy as np
-import usbcomm 
-import wscomm
+
+from . import wscomm
+from . import usbcomm 
 
 class SWmat():
     comm = None
+    port = None
 
-    def __init__(self, src): 
+    def __init__(self, port=None): 
         self.comm = None
 
-        if "ttyACM" in src:
-            self.comm = usbcomm.USBComm(src)
-        elif "ws://" in src:
-            self.comm = wscomm.WSComm(src)
-        else:
-            raise Exception(f"Invalid source {src}")
+        if port is not None:
+            self.port = port
+            self.open(port)
 
+    def open(self, port):
+        if "ttyACM" in port:
+            self.comm = usbcomm.USBComm(port)
+        elif "ws://" in port:
+            self.comm = wscomm.WSComm(port)
+        else:
+            raise Exception(f"Invalid port: {port}")
+     
     def pinstat_all(self):
         pinstat = self.comm.send_data('PINSTAT ALL')
         pinstat = np.array([int(i) for i in pinstat.split()]).reshape(16,16)
@@ -35,6 +42,6 @@ class SWmat():
         stat = self.pinstat_all()
         for i in range(16):
             for j in range(16):
-                if stat[i][j] == 1:
-                    off(i, j)
+                if stat[i][j]:
+                    self.off(i, j)
 

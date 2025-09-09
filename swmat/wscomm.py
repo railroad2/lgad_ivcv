@@ -20,14 +20,17 @@ class WSComm:
             print (f'Invalid command {data}', file=sys.stderr)
             return
 
-        response = asyncio.run(self.send_data_once(data1))
-        responsed = json.loads(response)
+        if data1['cmd'] == 'get':
+            response = asyncio.run(self.send_data_once(data1))
+            responsed = json.loads(response)
 
-        if 'pins' in responsed.keys():
-            return self._conv_pinstat(responsed['pins'])
+            if 'pins' in responsed.keys():
+                return self._conv_pinstat(responsed['pins'])
+            else:
+                return response
         else:
-            return response
-     
+            return  
+
     async def send_data_once(self, data, timeout=3, reply=None):
         if isinstance(data, dict):
             text = json.dumps(data)

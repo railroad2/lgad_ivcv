@@ -49,18 +49,17 @@ class InstBase:
                 continue
 
             tmp = rm.open_resource(rname, read_termination=read_termination)
+            #tmp.timeout = 1
             try:
                 idn = tmp.query("*idn?")
                 tmp.close()
             except pyvisa.VisaIOError as e:
                 if e.error_code == pyvisa.constants.VI_ERROR_TMO:
                     print (f"Operation timed out for {rname}")
-
                 tmp.close()
                 continue
 
             if msg not in idn:
-                print (idn)
                 tmp.close()
                 continue 
             else:
@@ -72,7 +71,6 @@ class InstBase:
                 return rname
 
         return
-        
 
     def close(self):
         self._inst.close()

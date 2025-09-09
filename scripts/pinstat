@@ -1,7 +1,72 @@
-#!/bin/bash
+#!/usr/bin/env python3
+import json 
+import websockets
+import asyncio
+import argparse
 
-ch=$1
-tty=`ls /dev/ttyACM*`
+uri = 'ws://localhost:3001'
+timeout = 5
 
-echo "PINSTAT ${ch}" > ${tty}
-sleep 0.1
+def print_with_frame(pins, ch=None, frame=True, cols=16):
+    noheadflg  = True
+    noprintflg = True
+    
+    for i, pin in enumerate(pins):
+        if (ch is not None) and (i//cols not in ch): 
+            continue
+
+        if (noheadflg and frame):
+            print (' '*3+'| ', end='')
+
+            for j in range(cols):
+                print (f"{j:2d} ", end='')
+
+            print ('\n'+'-'*53)
+            noheadflg = False
+
+        if i%cols == 0 and frame:
+            print (f"{i//16:2d} |  ", end='')
+
+        print (f"{pin} ", end='')
+        if frame: print (end=' ')
+
+        noprintflg = False
+
+        if i%cols == cols - 1:
+            print ()
+
+    if (noprintflg):
+        print ("The pcfid out of range.")
+
+def conv_pinstat(datain):
+    pinstat = [int(i) for i in datain]
+    return pinstat
+
+async def send_data_once(data):
+    async with websockets.connect(uri, ping_interval=None, open_timeout=timeout) as ws:
+        await asyncio.wait_for(ws.send(data), timeout=timeout)
+        response = await asyncio.wait_for(ws.recv(), timeout=timeout)
+
+    responsed = json.loads(response)['pins']
+    
+    pins = conv_pinstat(responsed)
+    
+    return pins
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("items", nargs="*", help="Channel numbers")
+    parser.add_argument("--noframe", action="store_false", help="No frame printed.") 
+    args = parser.parse_args()
+
+    ch = [int(i) for i in args.items]
+
+    if len(ch) == 0:
+        ch = None
+
+    payload = {"cmd":"get"}
+    pins = asyncio.run(send_data_once(json.dumps(payload)))
+    print_with_frame(pins, ch, args.noframe) 
+    
+if __name__=="__main__":
+    main()

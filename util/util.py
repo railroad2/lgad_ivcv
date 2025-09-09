@@ -4,6 +4,7 @@ import serial
 import re
 import numpy as np
 
+from collections.abc import Iterable
 
 def mkdir(path):
     path = os.path.normpath(path)
@@ -38,6 +39,36 @@ def round_to_significant_figures(x, sig_figs):
     if x == 0:
         return 0
     return round(x, sig_figs - int(np.floor(np.log10(abs(x)))) - 1)
+
+
+def nch2rowcol(nch, ncol=16):
+    try: 
+        iter(nch)
+    except TypeError:
+        nch = [nch]
+
+    res = []
+
+    for each in nch:
+        row = each // ncol
+        col = each % ncol
+        res.append((row, col))
+
+    return res
+
+
+def rowcol2nch(rowcol, ncol=16):
+    try:
+        iter(rowcol[0])
+    except TypeError:
+        rowcol = [rowcol]
+
+    res = []
+    for each in rowcol:
+        row, col = each
+        res.append(row*ncol + col)
+
+    return res
 
 
 def parse_voltage_steps(input_str):

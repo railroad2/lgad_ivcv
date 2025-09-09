@@ -1,0 +1,7 @@
+#!/bin/bash
+
+ch=$1
+tty=`ls /dev/ttyACM*`
+
+echo "PINSTAT ${ch}" > ${tty}
+sleep 0.1

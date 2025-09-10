@@ -1,0 +1,40 @@
+#!/usr/bin/env python3
+import serial
+import wsutil
+import usbutil
+import argparse
+import json
+import asyncio
+
+def pinstat_usb(ch=None, frame=True, color=True):
+    usbutil.pinstat(ch, frame, color)
+
+async def pinstat_ws(ch=None, frame=True, color=True):
+    payload = {"cmd":"get"}
+    pins = await wsutil.send_data_once(json.dumps(payload))
+    wsutil.print_with_frame(pins, ch, frame, color) 
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("items", nargs="*", help="Channel numbers")
+    parser.add_argument("--noframe", action="store_false", help="No frame printed.") 
+    parser.add_argument("--nocolor", action="store_false", help="No colored printed.") 
+    parser.add_argument("--usb", action="store_true", help="Use usb serial instead of websocket.")
+    args = parser.parse_args()
+
+    ch = [int(i) for i in args.items]
+
+    if len(ch) == 0:
+        ch = None
+
+    if args.usb:
+        pinstat_usb(ch, args.noframe, args.nocolor)
+    else:
+        try:
+            asyncio.run(pinstat_ws(ch, args.noframe, args.nocolor))
+        except ConnectionRefusedError:
+            pinstat_usb(ch, args.noframe, args.nocolor)
+
+    
+if __name__=="__main__":
+    main()

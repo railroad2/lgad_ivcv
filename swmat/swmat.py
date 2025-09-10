@@ -1,3 +1,4 @@
+import time
 import numpy as np
 
 from . import wscomm
@@ -6,6 +7,7 @@ from . import usbcomm
 class SWmat():
     comm = None
     port = None
+    delay = 0.5
 
     def __init__(self, port=None): 
         self.comm = None
@@ -31,12 +33,16 @@ class SWmat():
     def on(self, row, col):
         nch = row*16 + col
         recv = self.comm.send_data(f"ON {nch}")
-        print (recv)
+        if recv is not None:
+            print (recv)
+        time.sleep(self.delay)
 
     def off(self, row, col):
         nch = row*16 + col
         recv = self.comm.send_data(f"OFF {nch}")
-        print (recv)
+        if recv is not None:
+            print (recv)
+        time.sleep(self.delay)
 
     def off_all(self):
         stat = self.pinstat_all()

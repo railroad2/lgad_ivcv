@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+import time
+import argparse
+import json
+import asyncio
+import serial
+
+import wsutil
+import usbutil
+
+def on_usb(ch=None, show=True, frame=True, color=True):
+    usbutil.sw_onoff(ch, True)
+    if show:
+        usbutil.pinstat(None, frame, color)
+
+async def on_ws(ch=None, show=True, frame=True, color=True):
+    await wsutil.sw_onoff(ch, True)
+    if show:
+        await wsutil.pinstat(ch, frame, color)
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("items", nargs="+", help="Channel numbers")
+    parser.add_argument("--usb", action="store_true", help="Use usb serial instead of websocket.")
+    parser.add_argument("--websocket", action="store_true", help="Try websocket only.")
+    parser.add_argument("--silence", action="store_false", help="Do not print out the pinstat")
+    args = parser.parse_args()
+
+    ch = [int(i) for i in args.items]
+    show = args.silence
+
+    if args.usb:
+        on_usb(ch, show)
+    else: 
+        try:
+            asyncio.run(on_ws(ch, show))
+        except ConnectionRefusedError as e:
+            if not args.websocket:
+                on_usb(ch, show)
+            else:
+                raise ConnectionRefusedError(e)
+    
+if __name__=="__main__":
+    main()

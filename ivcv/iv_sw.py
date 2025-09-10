@@ -34,10 +34,15 @@ class IV_sw():
     Icomp = 1e-5
     return_swp = False
     
-    def __init__(self):
+    rt_plot = False
+    dryrun = False
+
+    def __init__(self, port=None, dryrun=False):
         ## Setup switching matrix
-        self.swm = swmat.SWmat()
+        self.swm = swmat.SWmat(port)
         self.iv  = IVMeasurement()
+
+        self.dryrun = dryrun
 
         ## output path
         self.basepath = f"../../result/{datetime.datetime.now().date().isoformat()}/{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
@@ -48,6 +53,9 @@ class IV_sw():
         self.swm.open(port)
 
     def set_smu(self, smu_rsrc=None):
+        if self.dryrun:
+            return 
+
         if smu_rsrc is None:
             print ('Looking for the SMU')
             smu_rsrc = self.smu.find_inst()
@@ -57,6 +65,9 @@ class IV_sw():
             self.smu.open(smu_rsrc)
 
     def set_pau(self, pau_rsrc=None):
+        if self.dryrun:
+            return 
+
         if pau_rsrc is None:
             print ('Looking for the PAU')
             pau_rsrc = self.pau.find_inst()
@@ -80,8 +91,8 @@ class IV_sw():
     
     def set_compliance(self, Icomp):
         self.Icomp = Icomp
-
-    def measure(self, row=0, col=0):
+    
+    def measure_Vsweep(self, row=0, col=0):
         v0, v1, dv = self.v0, self.v1, self.dv
         return_swp = self.return_swp
         rt_plot    = self.rt_plot
@@ -97,18 +108,29 @@ class IV_sw():
     def measure_coord(self, coords, verbose=1):
         swm = self.swm
 
+        print ('Turning off all switches.')
         swm.off_all()
 
         for row, col in coords:
+            if verbose: 
+                print ("-"*60)
+                print (f"Switch: ({row}, {col})")
+                print ("Pinstat:")
+
             swm.on(row, col)
-            if verbose: print (swm.pinstat_all()) 
+            time.sleep(1)
+
+            if verbose: 
+                print (swm.pinstat_all()) 
             
-            self.measure(row, col) 
+            if self.dryrun: 
+                print ('   dry run.')
+            else:
+                self.measure_Vsweep(row, col) 
 
             swm.off(row, col)
-            if verbose: print (swm.pinstat_all()) 
 
-            time.sleep(0.5)
+            time.sleep(1)
 
     def measure_channel(self, channels):
         coords = nch2rowcol(channels)
@@ -118,7 +140,5 @@ class IV_sw():
         cols, rows = np.meshgrid(np.arange(16), np.arange(16))
         coords = np.array([rows.flatten(), cols.flatten()]).T
         self.measure_coord(coords)
-
-
 
 

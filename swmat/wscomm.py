@@ -4,6 +4,8 @@ import json
 import websockets
 
 class WSComm:
+    debug = False
+
     def __init__(self, uri=None):
         self.uri = uri
 
@@ -29,7 +31,8 @@ class WSComm:
             else:
                 return response
         else:
-            return  
+            response = asyncio.run(self.send_data_once(data1))
+            return response
 
     async def send_data_once(self, data, timeout=3, reply=None):
         if isinstance(data, dict):
@@ -40,6 +43,9 @@ class WSComm:
             text = data
             if reply is None:
                 reply = ("get" in text.lower())
+
+        if self.debug:
+            print (text)
 
         async with websockets.connect(self.uri, ping_interval=None, open_timeout=timeout) as ws:
             try:

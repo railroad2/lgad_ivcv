@@ -51,8 +51,6 @@ class WSComm:
             except asyncio.TimeoutError:
                 return "Timeout: no response from the websocket"
 
-
-
     def _conv_pinstat(self, datain):
         pinstat = [str(int(i)) for i in datain]
         return ' '.join(pinstat)

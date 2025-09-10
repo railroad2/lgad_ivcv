@@ -5,18 +5,18 @@ import json
 import asyncio
 import serial
 
-import wsutil
-import usbutil
+from lgad_ivcv.swmat import wstools
+from lgad_ivcv.swmat import usbtools
 
 def on_usb(ch=None, show=True, frame=True, color=True):
-    usbutil.sw_onoff(ch, True)
+    usbtools.sw_onoff(ch, True)
     if show:
-        usbutil.pinstat(None, frame, color)
+        usbtools.pinstat(None, frame, color)
 
 async def on_ws(ch=None, show=True, frame=True, color=True):
-    await wsutil.sw_onoff(ch, True)
+    await wstools.sw_onoff(ch, True)
     if show:
-        await wsutil.pinstat(ch, frame, color)
+        await wstools.pinstat(ch, frame, color)
 
 def main():
     parser = argparse.ArgumentParser()

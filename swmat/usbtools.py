@@ -1,5 +1,5 @@
 import serial
-import wsutil
+from .print_pinstat import print_with_frame
 
 def sw_onoff(ch, onoff):
     if ch is None:
@@ -32,7 +32,7 @@ def pinstat(ch=None, frame=True, color=True):
     res = res.split()
     try:
         res = [int(i) for i in res]
-        wsutil.print_with_frame(res, ch, frame, color)
+        print_with_frame(res, ch, frame, color)
     except ValueError:
         print(res)
 

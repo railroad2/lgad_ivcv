@@ -4,11 +4,11 @@ import time
 import datetime
 import numpy as np
 
-sys.path.append( os.path.dirname( os.path.abspath( os.path.dirname( os.path.abspath( os.path.dirname(__file__))))))
+#sys.path.append( os.path.dirname( os.path.abspath( os.path.dirname( os.path.abspath( os.path.dirname(__file__))))))
 
 from .IVMeasurement import IVMeasurement
 
-from .. import swmat
+from lgad_ivcv.swmat import swmat
 from ..inst import Keithley2400, Keithley6487
 from ..util.util import nch2rowcol, rowcol2nch
 

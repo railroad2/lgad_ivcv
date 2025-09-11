@@ -10,9 +10,10 @@ import wstools
 import usbtools
 
 def on_usb(ch=None, show=True, frame=True, color=True):
-    usbtools.sw_onoff(ch, True)
+    port = usbtools.find_pico_ports()[0]
+    usbtools.sw_onoff(ch, True, port=port)
     if show:
-        usbtools.pinstat(None, frame, color)
+        usbtools.pinstat(None, frame, color, port=port)
 
 async def on_ws(ch=None, show=True, frame=True, color=True):
     await wstools.sw_onoff(ch, True)

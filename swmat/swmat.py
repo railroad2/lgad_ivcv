@@ -2,10 +2,10 @@ import sys
 import time
 import numpy as np
 
-#from . import wscomm
-#from . import usbcomm 
-import wscomm
-import usbcomm
+from . import wscomm
+from . import usbcomm 
+#import wscomm
+#import usbcomm
 
 class SWmat():
     comm = None
@@ -19,7 +19,7 @@ class SWmat():
             self.port = port
             self.open(port)
 
-    def open(self, port):
+    def open(self, port=None):
         if "ttyACM" in port:
             self.comm = usbcomm.USBComm(port)
         elif "ws://" in port:

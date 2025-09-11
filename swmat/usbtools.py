@@ -3,17 +3,35 @@ import sys
 import time
 import json
 import serial
-#sys.path.append( os.path.dirname(os.path.abspath( os.path.dirname(os.path.abspath( os.path.dirname(__file__))))))
-#try:
-#    from print_utils import print_with_frame, parse_first_json_line
-#except ModuleNotFoundError:
-#    from .print_utils import print_with_frame, parse_first_json_line
+from serial.tools import list_ports
 
-#sys.path.insert(0, '..')
-from print_utils import print_with_frame, parse_first_json_line
+try:
+    from print_utils import print_with_frame, parse_first_json_line
+except ModuleNotFoundError:
+    from .print_utils import print_with_frame, parse_first_json_line
     
 
-def sw_onoff(ch, onoff):
+def find_pico_ports():
+    """Return a list of candidate serial device names for Pico/MicroPython."""
+    candidates = []
+    for i in list_ports.comports():
+        m = (i.manufacturer or "").lower()
+        d = (i.description or "").lower()
+        vid = i.vid or 0
+        pid = i.pid or 0
+        # Heuristics: match on manufacturer/description or known VID/PID
+        if (
+            "micropython" in m
+            or "raspberry" in m
+            or "pico" in d
+            or "rp2" in d
+            or (vid, pid) in {(0x2E8A, 0x0005), (0x2E8A, 0x000A)}  # examples
+            ):
+            candidates.append(i.device)
+
+    return candidates
+
+def sw_onoff(ch, onoff, port=None):
     if ch is None:
         ch1 = "all"
     elif isinstance(ch, (list, tuple)):
@@ -22,7 +40,9 @@ def sw_onoff(ch, onoff):
     else:
         ch1 = ch
 
-    port = '/dev/ttyACM0'
+    if port is None:
+        port = find_pico_ports()[0] #'/dev/ttyACM0'
+
     ser = serial.Serial(port, 115200, timeout=5)
 
     if onoff:
@@ -36,8 +56,10 @@ def sw_onoff(ch, onoff):
     time.sleep(0.0)
 
 
-def pinstat(ch=None, frame=True, color=True):
-    port = '/dev/ttyACM0'
+def pinstat(ch=None, frame=True, color=True, port=None):
+    if port is None:
+        port = find_pico_ports()[0]
+
     ser = serial.Serial(port, 115200, timeout=5)
 
     cmd = f"PINSTAT all"+ '\n'

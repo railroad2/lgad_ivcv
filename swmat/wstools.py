@@ -5,8 +5,10 @@ import time
 import json 
 import websockets
 import asyncio
-from print_utils import print_with_frame
-    
+try:
+    from print_utils import print_with_frame
+except ModuleNotFoundError:
+    from .print_utils import print_with_frame
 
 uri = 'ws://localhost:3001'
 timeout = 5

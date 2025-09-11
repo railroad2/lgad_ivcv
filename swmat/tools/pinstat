@@ -11,7 +11,8 @@ import wstools
 import usbtools
 
 def pinstat_usb(ch=None, frame=True, color=True):
-    usbtools.pinstat(ch, frame, color)
+    port = usbtools.find_pico_ports()[0]
+    usbtools.pinstat(ch, frame, color, port=port)
 
 async def pinstat_ws(ch=None, frame=True, color=True):
     payload = {"cmd":"get"}

@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-import serial
+import sys
 import argparse
 import json
 import asyncio
 
-from lgad_ivcv.swmat import wstools
-from lgad_ivcv.swmat import usbtools
+from os.path import join, split
+
+sys.path.insert(0, join(*(split(sys.path[0])[:-1])))
+import wstools
+import usbtools
 
 def pinstat_usb(ch=None, frame=True, color=True):
     usbtools.pinstat(ch, frame, color)

@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-import time
+import sys
 import argparse
-import json
 import asyncio
-import serial
 
-from lgad_ivcv.swmat import wstools
-from lgad_ivcv.swmat import usbtools
+from os.path import join, split
+
+sys.path.insert(0, join(*(split(sys.path[0])[:-1])))
+import wstools
+import usbtools
 
 def off_usb(ch=None, show=True, frame=True, color=True):
     usbtools.sw_onoff(ch, False)

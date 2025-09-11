@@ -45,3 +45,12 @@ def print_with_frame(pins, ch=None, frame=True, colored=True, cols=16):
 
     if (noprintflg):
         print ("The pcfid out of range.")
+
+def parse_first_json_line(text: str):
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith('{') and line.endswith('}'):
+            return json.loads(line)
+    raise ValueError("No JSON line found in response")
+
+

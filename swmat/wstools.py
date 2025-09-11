@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+import os
+import sys
 import time
 import json 
 import websockets
 import asyncio
-
-from .print_pinstat import print_with_frame
+from print_utils import print_with_frame
+    
 
 uri = 'ws://localhost:3001'
 timeout = 5

@@ -1,5 +1,7 @@
-from . import swmat
-from . import usbcomm
-from . import wscomm
+#from . import swmat
+#from . import usbcomm
+#from . import usbtools
+#from . import wscomm
+#from . import wstools
 
-from .swmat import SWmat
+#from .swmat import SWmat

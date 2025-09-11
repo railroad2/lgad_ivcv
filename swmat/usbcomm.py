@@ -20,7 +20,7 @@ class USBComm:
         return self.ser is not None
 
     def send_data(self, data):
-        self.ser.write(f"{data}\r".encode())
+        self.ser.write(f"{data}\r\n".encode())
         mes = self.ser.read_until().strip()
         return mes.decode()
 
@@ -29,7 +29,7 @@ class USBComm:
             raise Exception("The port is already connected.")
 
         with serial.Serial(port=self.port, baudrate=115200, timeout=1) as ser:
-            wer.write(f"{data}\r".encode())
+            wer.write(f"{data}\r\n".encode())
             mes = self.ser.read_until().strip()
             return mes.decode()
 

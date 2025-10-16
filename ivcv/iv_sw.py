@@ -113,16 +113,17 @@ class IV_sw():
         print ('Turning off all switches.')
         swm.off_all()
 
+        t2 = time.time()
         for row, col in coords:
             if verbose: 
                 print ("-"*60)
                 print (f"Switch: ({row}, {col})")
-                print ("Pinstat:")
 
             swm.on(row, col)
             time.sleep(0.1)
 
             if verbose: 
+                print ("Pinstat:")
                 print (swm.pinstat_all()) 
             
             if self.dryrun: 
@@ -134,7 +135,8 @@ class IV_sw():
                 print (f'   Elapsed time for sweep = {t1 - t0} s')
 
             swm.off(row, col)
-
+            t3 = time.time()
+            print (f'*** Total time for measurement = {t3 - t2} s')
 
             time.sleep(0.1)
 

@@ -128,9 +128,13 @@ class IV_sw():
             if self.dryrun: 
                 print ('   dry run.')
             else:
+                t0 = time.time()
                 self.measure_Vsweep(row, col) 
+                t1 = time.time()
+                print (f'   Elapsed time for sweep = {t1 - t0} s')
 
             swm.off(row, col)
+
 
             time.sleep(0.1)
 

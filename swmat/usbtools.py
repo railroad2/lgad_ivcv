@@ -31,10 +31,18 @@ def find_pico_ports():
 
     return candidates
 
-def sw_onoff(ch, onoff, port=None):
-    if ch is None:
-        ch1 = "all"
-    elif isinstance(ch, (list, tuple)):
+def send_line(line, port=None):
+    if port is None:
+        port = find_pico_ports()[0] #'/dev/ttyACM0'
+
+    ser = serial.Serial(port, 115200, timeout=5)
+    
+    payload = f"{line}\r\n".encode()
+    ser.write(payload)
+    ser.flush()
+
+def sw_onoff_old(ch, onoff, port=None):
+    if isinstance(ch, (list, tuple)):
         ch1 = [str(c) for c in ch]
         ch1 = ' '.join(ch1)
     else:
@@ -48,7 +56,10 @@ def sw_onoff(ch, onoff, port=None):
     if onoff:
         cmd = f"ON {ch1}" + '\n'
     else:
-        cmd = f"OFF {ch1}" + '\n'
+        if ch == "all":
+            cmd = f"ALLOFF\n"
+        else:
+            cmd = f"OFF {ch1}" + '\n'
 
     ser.write(cmd.encode('utf-8'))
     res = ser.readline().decode().strip()
@@ -56,7 +67,7 @@ def sw_onoff(ch, onoff, port=None):
     time.sleep(0.0)
 
 
-def pinstat(ch=None, frame=True, color=True, port=None):
+def pinstat_old(ch=None, frame=True, color=True, port=None):
     if port is None:
         port = find_pico_ports()[0]
 
@@ -79,4 +90,52 @@ def pinstat(ch=None, frame=True, color=True, port=None):
         print (e)
         print(res)
 
+
+def sw_onoff(ch, onoff, port=None):
+    if isinstance(ch, (list, tuple)):
+        ch1 = [str(c) for c in ch]
+        ch1 = ' '.join(ch1)
+    else:
+        ch1 = ch
+
+    if port is None:
+        port = find_pico_ports()[0] #'/dev/ttyACM0'
+
+    ser = serial.Serial(port, 115200, timeout=5)
+
+    if onoff:
+        cmd = {"cmd": "ON", "pins": ch1}
+    else:
+        if ch == "all":
+            cmd = {"cmd": "ALLOFF"}
+        else:
+            cmd = {"cmd": "OFF", "pins": ch1}
+
+    send_line(json.dumps(cmd))
+    res = ser.readline().decode().strip()
+    #print (f'{res}')
+    time.sleep(0.0)
+
+
+def pinstat(ch=None, frame=True, color=True, port=None):
+    if port is None:
+        port = find_pico_ports()[0]
+
+    ser = serial.Serial(port, 115200, timeout=5)
+
+    cmd = {"cmd":"PINSTAT", "which":"all"}
+    send_line(json.dumps(cmd))
+
+    res = ser.readline().decode().strip()
+    res = parse_first_json_line(res)
+    pins = None
+    if (res["ok"]):
+        pins = res['pins']
+
+    try:
+        pins = [int(i) for i in pins]
+        print_with_frame(pins, ch, frame, color)
+    except (ValueError, TypeError) as e:
+        print (e)
+        print (res)
 

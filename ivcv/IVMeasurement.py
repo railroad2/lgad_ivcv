@@ -30,7 +30,7 @@ class IVMeasurement(Measurement):
         self.return_sweep = True
         self.live_plot = True
         self.current_compliance = 1e-5
-        self.pau_current_range = 2e-6
+        self.pau_current_range = 2e-9
 
         self.x_axis_label = 'Bias Voltage (V)'
         self.y_axis_label = 'Current (I)'
@@ -48,7 +48,7 @@ class IVMeasurement(Measurement):
         self._make_out_dir()
 
         self.set_smu(smu_visa_resource)
-        self.set_pau(smu_visa_resource)
+        self.set_pau(pau_visa_resource)
 
         if self.smu is not None:
             self.resources_closed = False
@@ -80,7 +80,7 @@ class IVMeasurement(Measurement):
             self.pau = pau_visa_resource
             self._initialize_pau()
         elif isinstance(pau_visa_resource, str):
-            self.pau_visa_resource= pau_visa_resource
+            self.pau_visa_resource = pau_visa_resource
             self.pau = Keithley6487()
             self.pau.open(self.pau_visa_resouce)
             self._initialize_pau()
@@ -116,9 +116,9 @@ class IVMeasurement(Measurement):
         print("User interrupt...")
         self.smu.set_voltage(0)
         self.smu.set_output('off')
-        self.smu.close()
-        if (self.pau):
-            self.pau.close()
+        #self.smu.close()
+        #if (self.pau):
+        #    self.pau.close()
         self.resources_closed = True
         print("WARNING: Please make sure the output is turned off!")
         # exit(1)
@@ -168,9 +168,9 @@ class IVMeasurement(Measurement):
         if self.resources_closed is False:
             self.smu.set_voltage_ramp(0)
             self.smu.set_output('off')
-            self.smu.close()
-            if (self.pau):
-                self.pau.close()
+            #self.smu.close()
+            #if (self.pau):
+            #    self.pau.close()
             self.resources_closed = True
 
             file_name = self.make_out_file_name()

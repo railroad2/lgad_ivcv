@@ -11,11 +11,14 @@ from collections.abc import Iterable
 import lgad_ivcv
 from lgad_ivcv.ivcv import iv_sw
 
-def measure_all(smport, v0, v1, dv, Icomp, basepath, sensor_name, channels=[], return_swp=False, dryrun=False):
+def measure_all(smport, v0, v1, dv, Icomp, 
+                basepath, sensor_name, 
+                rsmu=None, rpau=None
+                channels=[], return_swp=False, dryrun=False):
     ivsw = iv_sw.IV_sw(smport, dryrun)
 
-    ivsw.set_smu()
-    ivsw.set_pau()
+    ivsw.set_smu(rsmu)
+    ivsw.set_pau(rpau)
     ivsw.basepath = basepath
     ivsw.set_sensor_name(sensor_name)
     ivsw.set_sweep(v0, v1, dv, return_swp)
@@ -40,6 +43,9 @@ def main():
     parser.add_argument('--basepath',   required=False, default=None,   help="Base path for result output")
     parser.add_argument('--return_swp', required=False, action="store_true", help="Return sweep")
     parser.add_argument('--dryrun',     required=False, action="store_true", help="Dry run with only switching matrix operation")
+    parser.add_argument('--smu',        required=False, default=None,   help="SMU resource")
+    parser.add_argument('--pau',        required=False, default=None,   help="PAU resource")
+
     parser.add_argument('-p', '--port', required=False, default='ws://localhost:3001', help="Switching matrix port")
     parser.add_argument('-I', '--Icompliance', required=False, default=1e-5, help="SMU current compliance")
 
@@ -57,6 +63,8 @@ def main():
     sensor_name = args.sensorname
     return_swp = args.return_swp
     dryrun = args.dryrun
+    rsmu = args.smu
+    rpau = args.pau
 
     if args.basepath == None:
         now = datetime.datetime.now().isoformat()
@@ -64,7 +72,10 @@ def main():
     else:
         args.basepath = basepath
 
-    measure_all(port, v0, v1, dv, Icomp, basepath, sensor_name, channels, return_swp, dryrun)
+    measure_all(port, v0, v1, dv, Icomp, 
+                basepath, sensor_name, 
+                rsmu, rpau, 
+                channels, return_swp, dryrun)
 
 if __name__=="__main__":
     main()

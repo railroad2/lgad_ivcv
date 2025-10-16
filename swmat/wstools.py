@@ -45,10 +45,28 @@ async def sw_onoff(ch, onoff):
         time.sleep(0.1)
 
 
+async def sw_onoff_new(ch, onoff):
+    val = True if onoff else False
+
+    payload = {"cmd":"PINSTAT", "which":"all"}
+    res = await send_data_once(json.dumps(payload))
+
+    for c in ch:
+        payload = {"cmd":"set", "ch":c, "val":val}
+        res = await send_data_once(json.dumps(payload))
+        time.sleep(0.1)
+
+
 async def pinstat(ch, frame=True, color=True):
     payload = {"cmd":"get"}
     res = await send_data_once(json.dumps(payload))
     time.sleep(0.1)
     print_with_frame(res)
 
+
+async def pinstat_new(ch, frame=True, color=True):
+    payload = {"cmd":"get"}
+    res = await send_data_once(json.dumps(payload))
+    time.sleep(0.1)
+    print_with_frame(res)
 

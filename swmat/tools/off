@@ -28,7 +28,11 @@ def main():
     parser.add_argument("--silence", action="store_false", help="Do not print out the pinstat")
     args = parser.parse_args()
 
-    ch = [int(i) for i in args.items]
+    if (args.items[0] == "all"):
+        ch = 'all'
+    else:
+        ch = [int(i) for i in args.items]
+
     show = args.silence
 
     if args.usb:

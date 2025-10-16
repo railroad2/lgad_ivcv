@@ -25,20 +25,29 @@ def main():
     parser.add_argument("--noframe", action="store_false", help="No frame printed.") 
     parser.add_argument("--nocolor", action="store_false", help="No colored printed.") 
     parser.add_argument("--usb", action="store_true", help="Use usb serial instead of websocket.")
+    parser.add_argument("-v", action="store_true", help="print verbose.")
     args = parser.parse_args()
 
-    ch = [int(i) for i in args.items]
+    if (len(args.items) == 0):
+        ch = []
+    elif (args.items[0] == 'all'):
+        ch = []
+    else: 
+        ch = [int(i) for i in args.items]
 
     if len(ch) == 0:
         ch = None
 
     if args.usb:
         pinstat_usb(ch, args.noframe, args.nocolor)
+        if args.v: print ("using usb serial")
     else:
         try:
             asyncio.run(pinstat_ws(ch, args.noframe, args.nocolor))
+            if args.v: print ("using websocket")
         except ConnectionRefusedError:
             pinstat_usb(ch, args.noframe, args.nocolor)
+            if args.v: print ("using usb serial")
 
     
 if __name__=="__main__":

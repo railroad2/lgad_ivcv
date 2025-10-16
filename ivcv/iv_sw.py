@@ -63,6 +63,7 @@ class IV_sw():
         self.smu_rsrc = smu_rsrc
         if smu_rsrc is not None:
             self.smu.open(smu_rsrc)
+            print (f'SMU is connected: {smu_rsrc}')
 
     def set_pau(self, pau_rsrc=None):
         if self.dryrun:
@@ -75,6 +76,7 @@ class IV_sw():
         self.pau_rsrc = pau_rsrc
         if pau_rsrc is not None:
             self.pau.open(pau_rsrc)
+            print (f'PAU is connected: {pau_rsrc}')
 
     def set_sensor_name(self, sname):
         self.sname = sname
@@ -118,7 +120,7 @@ class IV_sw():
                 print ("Pinstat:")
 
             swm.on(row, col)
-            time.sleep(1)
+            time.sleep(0.1)
 
             if verbose: 
                 print (swm.pinstat_all()) 
@@ -130,7 +132,7 @@ class IV_sw():
 
             swm.off(row, col)
 
-            time.sleep(1)
+            time.sleep(0.1)
 
     def measure_channel(self, channels):
         coords = nch2rowcol(channels)

@@ -120,7 +120,10 @@ class InstBase:
             try:
                 val1.append(float(v))
             except ValueError:
-                val1.append(float(v[:-1])) 
+                try:
+                    val1.append(float(v[:-1])) 
+                except ValueError:
+                    val1.append(-1e-30)
 
         return val1
 

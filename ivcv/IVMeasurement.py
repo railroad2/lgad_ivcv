@@ -36,7 +36,7 @@ class IVMeasurement(Measurement):
         self.y_axis_label = 'Current (I)'
 
         self.out_txt_header = 'Vinput(V)\tVsmu(V)\tIsmu(A)\tIpau(A)'
-        self.base_path += r'/I-V_test'
+        self.base_path += r'./IV_test'
 
     def initialize_measurement(self, smu_visa_resource=None, pau_visa_resource=None, sensor_name=None):
         if sensor_name:
@@ -45,7 +45,7 @@ class IVMeasurement(Measurement):
         self.measurement_arr.clear()
         self.output_arr.clear()
         self.data_points = -1
-        self._make_out_dir()
+        #self._make_out_dir()
 
         self.set_smu(smu_visa_resource)
         self.set_pau(pau_visa_resource)
@@ -60,7 +60,7 @@ class IVMeasurement(Measurement):
         elif isinstance(smu_visa_resource, str):
             self.smu_visa_resource = smu_visa_resource
             self.smu = Keithley2400()
-            self.smu.open(self.smu_visa_resouce)
+            self.smu.open(self.smu_visa_resource)
             self._initialize_smu()
         else:
             print ('An invalid resouce is assigned for SMU.')
@@ -82,7 +82,7 @@ class IVMeasurement(Measurement):
         elif isinstance(pau_visa_resource, str):
             self.pau_visa_resource = pau_visa_resource
             self.pau = Keithley6487()
-            self.pau.open(self.pau_visa_resouce)
+            self.pau.open(self.pau_visa_resource)
             self._initialize_pau()
         else:
             print ('An invalid resouce is assigned for Picoammeter.')
@@ -146,9 +146,10 @@ class IVMeasurement(Measurement):
 
     def start_measurement(self):
         self._make_voltage_array(self.initial_voltage, self.final_voltage)
+
         # print(self.voltage_array)
         self.smu.set_current_limit(self.current_compliance)
-        # signal.signal(signal.SIGINT, self._safe_escaper)
+        time.sleep(0.5)
 
         self.smu.set_voltage(0)
         self.smu.set_output('on')
@@ -162,18 +163,20 @@ class IVMeasurement(Measurement):
 
     def stop_measurement(self):
         self.event.set()  # set internal flag as true
-        # self.measurement_thread.join()
+        self.measurement_thread.join()
 
     def save_results(self):
         if self.resources_closed is False:
             self.smu.set_voltage_ramp(0)
             self.smu.set_output('off')
+
             #self.smu.close()
             #if (self.pau):
             #    self.pau.close()
-            self.resources_closed = True
+            #self.resources_closed = True
 
-            file_name = self.make_out_file_name()
+            self._make_out_dir(prefix="IV")
+            file_name = self.make_out_file_name(prefix='IV')
             out_file_name = self.get_unique_file_path(file_name)
 
             np.savetxt(out_file_name + '.txt', self.measurement_arr, header=self.out_txt_header)

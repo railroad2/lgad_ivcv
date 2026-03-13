@@ -12,6 +12,7 @@ from ..util.util   import parse_voltage_steps
 
 
 CURRENT_COMPLIANCE = 10e-6
+DEBUG=1
 
 
 class CVMeasurement(Measurement):
@@ -37,7 +38,7 @@ class CVMeasurement(Measurement):
         self.y_axis_label = 'Capacitance (F)'
 
         self.out_txt_header = 'Vpau(V)\tC(F)\tR(Ohm)\tIpau(A)'
-        self.base_path += r'/C-V_test'
+        self.base_path += r'./CV_test'
 
     def initialize_measurement(self, lcr_visa_resource=None, pau_visa_resource=None, sensor_name=None):
         if sensor_name:
@@ -46,7 +47,7 @@ class CVMeasurement(Measurement):
         self.measurement_arr.clear()
         self.output_arr.clear()
         self.data_points = -1
-        self._make_out_dir()
+        #self._make_out_dir()
 
         self.set_lcr(lcr_visa_resource)
         self.set_pau(pau_visa_resource)
@@ -61,11 +62,11 @@ class CVMeasurement(Measurement):
         elif isinstance(lcr_visa_resource, str):
             self.lcr_visa_resource = lcr_visa_resource
             self.lcr = WayneKerr4300()
-            self.lcr.open(self.lcr_visa_resouce)
+            self.lcr.open(self.lcr_visa_resource)
             self._initialize_lcr()
         else:
-            print ('An invalid resouce is assigned for LCR.')
-            self.smu = None
+            print ('An invalid resource is assigned for LCR.')
+            self.lcr = None
 
     def _initialize_lcr(self):
         self.lcr.initialize()
@@ -78,10 +79,10 @@ class CVMeasurement(Measurement):
         elif isinstance(pau_visa_resource, str):
             self.pau_visa_resource= pau_visa_resource
             self.pau = Keithley6487()
-            self.pau.open(self.pau_visa_resouce)
+            self.pau.open(self.pau_visa_resource)
             self._initialize_pau()
         else:
-            print ('An invalid resouce is assigned for Picoammeter.')
+            print (f'An invalid resource is assigned for Picoammeter. {pau_visa_resource}')
             self.pau = None
 
     def _initialize_pau(self):
@@ -115,6 +116,16 @@ class CVMeasurement(Measurement):
         self.live_plot = live_plot
         self.col_number = col_number
         self.row_number = row_number
+
+        self.lcr.set_level(self.ac_level)
+        self.lcr.set_freq(self.frequency)
+
+    def print_options(self):
+        print(f"{self.ac_level        =} V")
+        print(f"{self.frequency       =} Hz")
+        print(f"{self.initial_voltage =} V")
+        print(f"{self.final_voltage   =} V")
+        print(f"{self.voltage_step    =} V")
 
     def _safe_escaper(self):
         print("User interrupt... Turning off the output ...")
@@ -154,14 +165,27 @@ class CVMeasurement(Measurement):
             current_pau = 0
 
         #_ = self.lcr.measure()
+        capacitance = -1e-30
+        resistance = -1e-30
+
         res = self.lcr.measure()
         capacitance, resistance = res
+        capacitance = float(capacitance)
+        resistance = float(resistance)
+        print (voltage_out, capacitance, resistance)
 
-        try:
-            capacitance = float(capacitance)
-            resistance = float(resistance)
-        except Exception as exception:
-            print("error in _measure()", type(exception).__name__)
+        while capacitance == -1e-30 and resistance == -1e-30:
+            try:
+                time.sleep(0.1)
+                res = self.lcr.measure()
+                capacitance, resistance = res
+
+                capacitance = float(capacitance)
+                resistance = float(resistance)
+                print (voltage_out, capacitance, resistance)
+
+            except Exception as exception:
+                print("error in _measure()", type(exception).__name__)
 
         # print(voltage_pau, capacitance, resistance, current_pau)
         self.measurement_arr.append([voltage_out, capacitance, resistance, current_pau])
@@ -193,6 +217,8 @@ class CVMeasurement(Measurement):
     def stop_measurement(self):
         self.event.set()
         # self.measurement_thread.join()
+        self.lcr.set_dc_voltage(0)
+        self.lcr.set_output('OFF') 
 
     def save_cv_plot(self, out_file_name):
         measurement_arr_trans = np.array(self.measurement_arr).T
@@ -211,14 +237,18 @@ class CVMeasurement(Measurement):
         ax.set_ylabel('C (nF)', color='tab:blue')
 
         ax2 = ax.twinx()
-        ax2.plot(v, r, 'x-', color='tab:red')
+        ax2.plot(v, r, 'x-', color='tab:red', markersize=3, linewidth=0.3, label="$R$")
         ax2.set_ylabel('R (Ohm)', color='tab:red')
         ax2.set_yscale('log')
+        ax2.tick_params(axis='y', labelcolor='tab:red')
 
         ax3 = ax.twinx()
-        ax3.plot(v, 1 / (c) ** 2, 'x-', color='tab:green', markersize=5, linewidth=0.5, label="$1/C^2$")
-        ax3.set_ylabel('$1/C^2 ($F$^{-2})$', color='tab:green')
+        ax3.spines['right'].set_position(('axes', 1.2))
+        ax3.plot(v, 1 / (c*1e9) ** 2, 'x-', color='tab:green', markersize=3, linewidth=0.3, label="$1/C^2$")
+        ax3.set_ylabel('$1/C^2 ($nF$^{-2})$', color='tab:green')
         ax3.set_yscale('log')
+        ax3.tick_params(axis='y', labelcolor='tab:green')
+
         fig.tight_layout()
 
         fig.savefig(out_file_name)
@@ -230,21 +260,28 @@ class CVMeasurement(Measurement):
             print(f"   * Bias sweep of {self.n_measurement_points} meas "
                   f"between {self.initial_voltage} and {self.final_voltage} ")
             print(f"   * Return sweep: {self.return_sweep}")
+            self.lcr.set_dc_voltage(0)
+            time.sleep(0.1)
+            self.lcr.set_output('OFF')
 
-            if self.pau:
-                self.pau.set_output('OFF')
-                self.pau.close()
+            #if self.pau:
+            #    self.pau.set_output('OFF')
+            #    self.pau.close()
 
-            if self.lcr:
-                self.lcr.set_output('OFF')
-                self.lcr.set_dc_voltage(0)
-                self.lcr.close()
+            #if self.lcr:
+            #    self.lcr.set_output('OFF')
+            #    self.lcr.set_dc_voltage(0)
+            #    self.lcr.close()
 
-            self.resources_closed = True
+            #self.resources_closed = True
 
-            file_name = self.make_out_file_name()
+            self._make_out_dir(prefix="CV") # moved from initialize (kmlee 2026-02-09)
+
+            file_name = self.make_out_file_name(prefix='CV')
             out_file_name = self.get_unique_file_path(file_name)
+            print (out_file_name)
 
             np.savetxt(out_file_name + '.txt', self.measurement_arr, header=self.out_txt_header)
             self.save_cv_plot(out_file_name + '.png')
+
 

@@ -5,6 +5,7 @@ import datetime
 import argparse
 import ast
 import numpy as np
+
 from ast import literal_eval
 from collections.abc import Iterable
 
@@ -13,13 +14,13 @@ from lgad_ivcv.ivcv import iv_sw
 
 def measure_all(smport, v0, v1, dv, Icomp, 
                 basepath, sensor_name, 
-                rsmu=None, rpau=None
+                rsmu=None, rpau=None,
                 channels=[], return_swp=False, dryrun=False):
     ivsw = iv_sw.IV_sw(smport, dryrun)
 
     ivsw.set_smu(rsmu)
     ivsw.set_pau(rpau)
-    ivsw.basepath = basepath
+    ivsw.set_basepath(basepath)
     ivsw.set_sensor_name(sensor_name)
     ivsw.set_sweep(v0, v1, dv, return_swp)
     ivsw.set_compliance(Icomp)
@@ -67,10 +68,9 @@ def main():
     rpau = args.pau
 
     if args.basepath == None:
-        now = datetime.datetime.now().isoformat()
-        basepath = f"../../result/{now[:10]}/{now.split('.')[0].replace(':','')}"
+        basepath = f"../../result/"
     else:
-        args.basepath = basepath
+        basepath = args.basepath
 
     measure_all(port, v0, v1, dv, Icomp, 
                 basepath, sensor_name, 

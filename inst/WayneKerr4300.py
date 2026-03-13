@@ -27,6 +27,7 @@ class WayneKerr4300(InstBase):
         self.write(':MEAS:LEV 0.1')
         self.write(':MEAS:EQU-CCT PAR')
         self.write(':MEAS:SPEED MED')
+        self._inst.timeout=10000
         self.sleep(1)
 
     def measure(self):
@@ -40,8 +41,9 @@ class WayneKerr4300(InstBase):
          
     ## set functions
     def set_freq(self, freq):
+        print ("Function call set_freq()")
         self.write(f":MEAS:FREQ {freq}")
-        self.sleep(0)
+        self.sleep()
 
     def set_level(self, lev):
         self.write(f":MEAS:LEV {lev}")
@@ -65,14 +67,18 @@ class WayneKerr4300(InstBase):
 
     ## get functions
     def get_freq(self):
-        return float(self.query(f":MEAS:FREQ?"))
+        ans = self.query(f":MEAS:FREQ?")
+        return float(ans)
 
     def get_level(self):
-        return self.query(f":MEAS:LEV?")
+        ans = self.query(f":MEAS:LEV?")
+        return ans
 
     def get_dc_voltage(self, volt):
-        self.query(f":MEAS:V-BIAS?")
+        ans = self.query(f":MEAS:V-BIAS?")
+        return ans
 
     def get_output(self):
-        return self.query(":MEAS:BIAS?")
+        ans = self.query(":MEAS:BIAS?")
+        return ans
 

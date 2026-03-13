@@ -25,7 +25,6 @@ class IV_sw():
 
     # filename
     sname = None
-    basepath = None
 
     # voltage sweep
     v0 = 0
@@ -45,8 +44,7 @@ class IV_sw():
         self.dryrun = dryrun
 
         ## output path
-        self.basepath = f"../../result/{datetime.datetime.now().date().isoformat()}/{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
-        self.iv.basepath = self.basepath
+        self.iv.base_path = f"./IV_test"
 
     def set_switching_matrix(self, port):
         self.port = port
@@ -81,9 +79,8 @@ class IV_sw():
     def set_sensor_name(self, sname):
         self.sname = sname
 
-    def set_result_path(self, basepath):
-        self.basepath = basepath
-        self.iv.basepath = pasepath
+    def set_basepath(self, basepath):
+        self.iv.base_path = basepath
 
     def set_sweep(self, v0, v1, dv=1, return_swp=False):
         self.v0 = v0
@@ -108,6 +105,7 @@ class IV_sw():
         iv.measurement_thread.join()
 
     def measure_coord(self, coords, verbose=1):
+        self.iv.set_measurement_time()
         swm = self.swm
 
         print ('Turning off all switches.')
@@ -141,10 +139,12 @@ class IV_sw():
             time.sleep(0.1)
 
     def measure_channel(self, channels):
+        self.iv.set_measurement_time()
         coords = nch2rowcol(channels)
         self.measure_coord(coords)
 
     def measure_all_channels(self):
+        self.iv.set_measurement_time()
         cols, rows = np.meshgrid(np.arange(16), np.arange(16))
         coords = np.array([rows.flatten(), cols.flatten()]).T
         self.measure_coord(coords)

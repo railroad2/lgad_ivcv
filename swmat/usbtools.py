@@ -111,6 +111,8 @@ def sw_onoff(ch, onoff, port=None):
         else:
             cmd = {"cmd": "OFF", "pins": ch1}
 
+    print (cmd)
+
     send_line(json.dumps(cmd))
     res = ser.readline().decode().strip()
     #print (f'{res}')

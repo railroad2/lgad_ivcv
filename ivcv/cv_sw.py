@@ -8,7 +8,7 @@ sys.path.append( os.path.dirname( os.path.abspath( os.path.dirname( os.path.absp
 
 from .CVMeasurement import CVMeasurement
 
-from .. import swmat
+from lgad_ivcv.swmat import swmat
 from ..inst import WayneKerr4300, Keithley6487
 from ..util.util import nch2rowcol, rowcol2nch
 
@@ -25,7 +25,6 @@ class CV_sw():
 
     # filename
     sname = None
-    basepath = None
 
     # voltage sweep
     v0 = 0
@@ -38,14 +37,13 @@ class CV_sw():
     ac_level = 0.1
     freq = 1000
 
+    # realtime plot
+    rt_plot = False
+
     def __init__(self):
         ## Setup switching matrix
         self.swm = swmat.SWmat()
         self.cv  = CVMeasurement()
-
-        ## output path
-        self.basepath = f"../../result/{datetime.datetime.now().date().isoformat()}/{datetime.datetime.now().isoformat().split('.')[0].replace(':','')}"
-        self.cv.basepath = self.basepath
 
     def set_switching_matrix(self, port):
         self.port = port
@@ -59,21 +57,23 @@ class CV_sw():
         self.lcr_rsrc = lcr_rsrc
         self.lcr.open(lcr_rsrc)
 
-    def set_pau(self, pau_rsrc=None):
+    def set_pau(self, pau_rsrc=[]):
         if pau_rsrc is None:
+            self.pau = None
+            return
+
+        if pau_rsrc == []:
             print ("Looking for the Picoammeter")
             pau_rsrc = self.pau.find_inst()
-
-        self.pau_rsrc = pau_rsrc
-        if pau_rsrc is not None:
+            self.pau_rsrc = pau_rsrc
+        else:
             self.pau.open(pau_rsrc)
 
     def set_sensor_name(self, sname):
         self.sname = sname
 
-    def set_result_path(self, basepath):
-        self.basepath = basepath
-        self.iv.basepath = pasepath
+    def set_basepath(self, basepath):
+        self.cv.base_path = basepath
 
     def set_sweep(self, v0, v1, dv=1, return_swp=False):
         self.v0 = v0
@@ -87,13 +87,14 @@ class CV_sw():
         rt_plot    = self.rt_plot
 
         ac_level   = self.ac_level
-        frequency  = self.freq
+        freq       = self.freq
 
         cv = self.cv
 
         cv.initialize_measurement(self.lcr, self.pau, self.sname)
         cv.set_measurement_options(v0, v1, dv, 
                                    ac_level, freq, return_swp, col, row, rt_plot)
+        cv.print_options()
         cv.start_measurement()
         cv.measurement_thread.join()
         time.sleep(0.5)

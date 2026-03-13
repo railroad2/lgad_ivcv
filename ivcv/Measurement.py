@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from threading import Event
-from ..util.util import mkdir, getdate, round_to_significant_figures
+from ..util.util import mkdir, getdate, gettime, round_to_significant_figures
 
 
 class Measurement:
@@ -37,15 +37,19 @@ class Measurement:
         self.out_txt_header = ''
         self.base_path = r'LGAD_test'
         self.date = ''
+        self.time = ''
         self.out_dir_path = ''
 
         # for live plot
         self.y_axis_label = ''
         self.x_axis_label = ''
 
-    def _make_out_dir(self):
-        self.date = getdate()
-        # self.out_dir_path = os.path.join(self.base_path, f'{self.date}_{self.sensor_name}')
+    def _make_out_dir(self, prefix="IV"):
+        if self.date == '':
+            self.date = getdate()
+        if self.time == '':
+            self.time = gettime()
+
         separator = ','
 
         if separator in self.sensor_name:
@@ -53,7 +57,12 @@ class Measurement:
         else:
             dir_name = self.sensor_name
 
-        self.out_dir_path = os.path.join(self.base_path, f'{dir_name}')
+        self.out_dir_path = os.path.join(self.base_path, 
+                                         self.date, 
+                                         f"{dir_name}", 
+                                         f"{prefix}_{self.date}T{self.time}" 
+                                         )
+        #self.out_dir_path = self.base_path
         mkdir(self.out_dir_path)
 
     def make_out_file_name(self, prefix="IV"):
@@ -61,11 +70,10 @@ class Measurement:
 
         if separator in self.sensor_name:
             sensor_name, descr = self.sensor_name.split(separator, 1)
-            # FIXME use different prefix for IV and CV
-            file_name = (f'{prefix}_{sensor_name}_{descr}_{self.date}'
+            file_name = (f'{prefix}_{sensor_name}_{descr}'
                          f'_row{self.row_number:02d}_col{self.col_number:02d}')
         else:
-            file_name = (f'{prefix}_{self.sensor_name}_{self.date}'
+            file_name = (f'{prefix}_{self.sensor_name}'
                          f'_row{self.row_number:02d}_col{self.col_number:02d}')
         return file_name
 
@@ -241,6 +249,9 @@ class Measurement:
             return True
         else:
             return False
+
+    def set_measurement_time(self):
+        self.time = gettime()
 
     def set_status_str(self, index, forced_return_sweep=False):
         self.status = f'{index + 1}/{len(self.voltage_array)} processed'

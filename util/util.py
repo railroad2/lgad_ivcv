@@ -23,6 +23,8 @@ def mkdir(path):
 def getdate():
     return datetime.datetime.today().date().isoformat()
 
+def gettime(fstr="%H%M%S"):
+    return datetime.datetime.now().strftime(fstr)
 
 def make_unique_name(fn):
     uniq = 0

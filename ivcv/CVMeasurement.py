@@ -99,7 +99,7 @@ class CVMeasurement(Measurement):
 
         if not self.pau:
             if self.final_voltage < -40:
-                self.final_voltage = 40
+                self.final_voltage = -40
                 print ('The bias from the LCR meter is limited to 40 V.')
 
         # print(voltage_step)

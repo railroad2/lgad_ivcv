@@ -12,13 +12,14 @@ from collections.abc import Iterable
 import lgad_ivcv
 from lgad_ivcv.ivcv import cv_sw
 
-def measure_all(smport, v0, v1, dv, 
+def measure_all(smport, v0, v1, dv,
                 basepath, sensor_name,
                 rlcr=None, rpau=None,
-                channels=[], return_swp=False, dryrun=False):
+                channels=None, return_swp=False, dryrun=False):
+    if channels is None:
+        channels = []
 
-    cvsw = cv_sw.CV_sw()
-    cvsw.set_switching_matrix(smport)
+    cvsw = cv_sw.CV_sw(smport, dryrun)
 
     cvsw.set_lcr(rlcr)
     cvsw.set_pau(rpau)

@@ -12,10 +12,14 @@ from collections.abc import Iterable
 import lgad_ivcv
 from lgad_ivcv.ivcv import iv_sw
 
-def measure_all(smport, v0, v1, dv, Icomp, 
-                basepath, sensor_name, 
+
+def measure_all(smport, v0, v1, dv, Icomp,
+                basepath, sensor_name,
                 rsmu=None, rpau=None,
-                channels=[], return_swp=False, dryrun=False):
+                channels=None, return_swp=False, dryrun=False):
+    if channels is None:
+        channels = []
+
     ivsw = iv_sw.IV_sw(smport, dryrun)
 
     ivsw.set_smu(rsmu)

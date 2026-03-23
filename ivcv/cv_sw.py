@@ -31,7 +31,8 @@ class CV_sw():
 
     # instruments
     lcr = WayneKerr4300()
-    pau = Keithley6487()
+    #pau = Keithley6487()
+    pau = None
 
     # filename
     sname = None
@@ -83,8 +84,9 @@ class CV_sw():
             return
 
         if pau_rsrc is None:
-            print("Looking for the Picoammeter")
-            pau_rsrc = self.pau.find_inst()
+            #print("Looking for the Picoammeter")
+            #pau_rsrc = self.pau.find_inst()
+            print ("No picoammeter will be used.")
 
         self.pau_rsrc = pau_rsrc
         if pau_rsrc is not None:

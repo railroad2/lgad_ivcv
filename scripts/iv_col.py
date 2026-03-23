@@ -30,7 +30,7 @@ def main():
     parser.add_argument("--dryrun", required=False, action="store_true", help="Dry run with only switching matrix operation")
     parser.add_argument("--smu", required=False, default=None, help="SMU resource")
     parser.add_argument("--pau", required=False, default=None, help="PAU resource")
-    parser.add_argument("-p", "--port", required=False, default="ws://localhost:3001", help="Switching matrix port")
+    parser.add_argument("-p", "--port", required=False, default="ws://localhost:8765", help="Switching matrix port")
     parser.add_argument("-I", "--Icompliance", required=False, default=1e-5, help="SMU current compliance")
 
     args = parser.parse_args()

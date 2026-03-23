@@ -49,6 +49,30 @@ class SWmat():
         pinstat = np.array([int(i) for i in pinstat.split()]).reshape(16,16)
         return pinstat
 
+    def _coords_to_channels(self, coords):
+        return [row * 16 + col for row, col in coords]
+
+    def _send_onoff_channels(self, channels, turn_on):
+        if len(channels) == 0:
+            return
+
+        cmd = "ON" if turn_on else "OFF"
+
+        # GateComm supports multi-pin commands. Legacy comm layers do not,
+        # so keep a safe fallback to per-channel operations.
+        if isinstance(self.comm, gatecomm.GateComm):
+            recv = self.comm.send_data(f"{cmd} " + " ".join(str(ch) for ch in channels))
+            if recv is not None:
+                print(recv)
+            time.sleep(self.delay)
+            return
+
+        for ch in channels:
+            recv = self.comm.send_data(f"{cmd} {ch}")
+            if recv is not None:
+                print(recv)
+            time.sleep(self.delay)
+
     def on(self, row, col):
         nch = row*16 + col
         recv = self.comm.send_data(f"ON {nch}")
@@ -62,6 +86,24 @@ class SWmat():
         if recv is not None:
             print(recv)
         time.sleep(self.delay)
+
+    def on_coords(self, coords):
+        self._send_onoff_channels(self._coords_to_channels(coords), True)
+
+    def off_coords(self, coords):
+        self._send_onoff_channels(self._coords_to_channels(coords), False)
+
+    def on_row(self, row):
+        self.on_coords([(row, col) for col in range(16)])
+
+    def off_row(self, row):
+        self.off_coords([(row, col) for col in range(16)])
+
+    def on_col(self, col):
+        self.on_coords([(row, col) for row in range(16)])
+
+    def off_col(self, col):
+        self.off_coords([(row, col) for row in range(16)])
 
     def off_all(self):
         stat = self.pinstat_all()

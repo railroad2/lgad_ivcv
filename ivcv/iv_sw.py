@@ -15,7 +15,7 @@ from ..util.util import nch2rowcol, rowcol2nch
 
 class IV_sw():
     # switching matrix
-    port = 'ws://localhost:3001'
+    port = 'ws://localhost:8765'
     swm = None
     iv = None
 
@@ -160,15 +160,11 @@ class IV_sw():
                 if not (0 <= row < 16):
                     raise ValueError(f"Row out of range: {row}")
 
-                coords = [(row, col) for col in range(16)]
-
                 if verbose:
                     print("-"*60)
                     print(f"Switch row: {row}")
 
-                for each_row, each_col in coords:
-                    swm.on(each_row, each_col)
-                    time.sleep(0.1)
+                swm.on_row(row)
 
                 if verbose:
                     print("Pinstat:")
@@ -182,9 +178,7 @@ class IV_sw():
                     t1 = time.time()
                     print(f'   Elapsed time for row sweep = {t1 - t0} s')
 
-                for each_row, each_col in coords:
-                    swm.off(each_row, each_col)
-                    time.sleep(0.1)
+                swm.off_row(row)
 
         finally:
             try:
@@ -208,15 +202,11 @@ class IV_sw():
                 if not (0 <= col < 16):
                     raise ValueError(f"Column out of range: {col}")
 
-                coords = [(row, col) for row in range(16)]
-
                 if verbose:
                     print("-"*60)
                     print(f"Switch col: {col}")
 
-                for each_row, each_col in coords:
-                    swm.on(each_row, each_col)
-                    time.sleep(0.1)
+                swm.on_col(col)
 
                 if verbose:
                     print("Pinstat:")
@@ -230,9 +220,7 @@ class IV_sw():
                     t1 = time.time()
                     print(f'   Elapsed time for col sweep = {t1 - t0} s')
 
-                for each_row, each_col in coords:
-                    swm.off(each_row, each_col)
-                    time.sleep(0.1)
+                swm.off_col(col)
 
         finally:
             try:

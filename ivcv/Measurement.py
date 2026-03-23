@@ -10,6 +10,7 @@ from ..util.util import mkdir, getdate, gettime, round_to_significant_figures
 class Measurement:
     def __init__(self):
         self.sensor_name = ''
+        self.measurement_target_label = None
         self.initial_voltage = 0
         self.final_voltage = -250
         self.voltage_step = 1
@@ -68,14 +69,22 @@ class Measurement:
     def make_out_file_name(self, prefix="IV"):
         separator = ','
 
+        if self.measurement_target_label:
+            location_label = self.measurement_target_label
+        else:
+            location_label = f'row{self.row_number:02d}_col{self.col_number:02d}'
+
         if separator in self.sensor_name:
             sensor_name, descr = self.sensor_name.split(separator, 1)
             file_name = (f'{prefix}_{sensor_name}_{descr}'
-                         f'_row{self.row_number:02d}_col{self.col_number:02d}')
+                         f'_{location_label}')
         else:
             file_name = (f'{prefix}_{self.sensor_name}'
-                         f'_row{self.row_number:02d}_col{self.col_number:02d}')
+                         f'_{location_label}')
         return file_name
+
+    def set_measurement_target_label(self, label=None):
+        self.measurement_target_label = label
 
     def get_unique_file_path(self, file_name, extension='.txt'):
         # Regular expression to find files with the given prefix and a version number
@@ -269,4 +278,3 @@ class Measurement:
         ax.plot(output_arr_trans[0], output_arr_trans[1])
         fig.savefig(out_file_name)
         plt.close()
-

@@ -91,7 +91,7 @@ class IV_sw():
     def set_compliance(self, Icomp):
         self.Icomp = Icomp
     
-    def measure_Vsweep(self, row=0, col=0):
+    def measure_Vsweep(self, row=0, col=0, target_label=None):
         v0, v1, dv = self.v0, self.v1, self.dv
         return_swp = self.return_swp
         rt_plot    = self.rt_plot
@@ -99,6 +99,7 @@ class IV_sw():
 
         iv = self.iv
 
+        iv.set_measurement_target_label(target_label)
         iv.initialize_measurement(self.smu, self.pau, self.sname)
         iv.set_measurement_options(v0, v1, dv, Icomp, return_swp, col, row, rt_plot)
         iv.start_measurement()
@@ -143,10 +144,104 @@ class IV_sw():
         coords = nch2rowcol(channels)
         self.measure_coord(coords)
 
+    def measure_rows(self, rows=None, verbose=1):
+        self.iv.set_measurement_time()
+
+        if rows is None or len(rows) == 0:
+            rows = list(range(16))
+
+        swm = self.swm
+
+        print('Turning off all switches.')
+        swm.off_all()
+
+        try:
+            for row in rows:
+                if not (0 <= row < 16):
+                    raise ValueError(f"Row out of range: {row}")
+
+                coords = [(row, col) for col in range(16)]
+
+                if verbose:
+                    print("-"*60)
+                    print(f"Switch row: {row}")
+
+                for each_row, each_col in coords:
+                    swm.on(each_row, each_col)
+                    time.sleep(0.1)
+
+                if verbose:
+                    print("Pinstat:")
+                    print(swm.pinstat_all())
+
+                if self.dryrun:
+                    print(f'   dry run row: {row}')
+                else:
+                    t0 = time.time()
+                    self.measure_Vsweep(row, 0, target_label=f'row{row:02d}_allcol')
+                    t1 = time.time()
+                    print(f'   Elapsed time for row sweep = {t1 - t0} s')
+
+                for each_row, each_col in coords:
+                    swm.off(each_row, each_col)
+                    time.sleep(0.1)
+
+        finally:
+            try:
+                swm.off_all()
+            except Exception:
+                pass
+
+    def measure_col(self, cols=None, verbose=1):
+        self.iv.set_measurement_time()
+
+        if cols is None or len(cols) == 0:
+            cols = list(range(16))
+
+        swm = self.swm
+
+        print('Turning off all switches.')
+        swm.off_all()
+
+        try:
+            for col in cols:
+                if not (0 <= col < 16):
+                    raise ValueError(f"Column out of range: {col}")
+
+                coords = [(row, col) for row in range(16)]
+
+                if verbose:
+                    print("-"*60)
+                    print(f"Switch col: {col}")
+
+                for each_row, each_col in coords:
+                    swm.on(each_row, each_col)
+                    time.sleep(0.1)
+
+                if verbose:
+                    print("Pinstat:")
+                    print(swm.pinstat_all())
+
+                if self.dryrun:
+                    print(f'   dry run col: {col}')
+                else:
+                    t0 = time.time()
+                    self.measure_Vsweep(0, col, target_label=f'allrow_col{col:02d}')
+                    t1 = time.time()
+                    print(f'   Elapsed time for col sweep = {t1 - t0} s')
+
+                for each_row, each_col in coords:
+                    swm.off(each_row, each_col)
+                    time.sleep(0.1)
+
+        finally:
+            try:
+                swm.off_all()
+            except Exception:
+                pass
+
     def measure_all_channels(self):
         self.iv.set_measurement_time()
         cols, rows = np.meshgrid(np.arange(16), np.arange(16))
         coords = np.array([rows.flatten(), cols.flatten()]).T
         self.measure_coord(coords)
-
-

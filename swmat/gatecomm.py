@@ -1,8 +1,6 @@
 from collections.abc import Iterable
 from typing import Optional, Union
 
-from .protocol import col_pins, row_pins
-
 try:
     from swm_ctrl.websocket_client import (
         PinInput,
@@ -49,18 +47,3 @@ class GateComm(WebSocketClientSync):
 
     def off(self, pins: PinCollection):
         return super().off(*self._pin_args(pins))
-
-    def on_row(self, row: Union[int, str]):
-        return self.on(row_pins(row))
-
-    def off_row(self, row: Union[int, str]):
-        return self.off(row_pins(row))
-
-    def on_col(self, col: Union[int, str]):
-        return self.on(col_pins(col))
-
-    def off_col(self, col: Union[int, str]):
-        return self.off(col_pins(col))
-
-    def off_all(self):
-        return super().alloff()

@@ -1,10 +1,11 @@
 import argparse
 
 from lgad_ivcv.ivcv.iv_sw import IV_sw
+from lgad_ivcv.ivcv.config import resolve_result_path
 
 
 def measure_all(smport, v0, v1, dv, Icomp,
-                basepath, sensor_name,
+                resultpath, sensor_name,
                 rsmu=None, rpau=None,
                 channels=None, return_swp=False, dryrun=False):
     if channels is None:
@@ -13,7 +14,7 @@ def measure_all(smport, v0, v1, dv, Icomp,
     with IV_sw(smport, dryrun) as ivsw:
         ivsw.set_smu(rsmu)
         ivsw.set_pau(rpau)
-        ivsw.set_basepath(basepath)
+        ivsw.set_basepath(resultpath)
         ivsw.set_sensor_name(sensor_name)
         ivsw.set_sweep(v0, v1, dv, return_swp)
         ivsw.set_compliance(Icomp)
@@ -31,7 +32,7 @@ def main():
     parser.add_argument('--Vend', type=float, default=-10, help="End voltage")
     parser.add_argument('--Vstep', type=float, default=1, help="Voltage step")
     parser.add_argument('--sensorname', default='test', help="Sensor name")
-    parser.add_argument('--basepath', default='./result', help="Base path for result output")
+    parser.add_argument('--resultpath', default=None, help="Result path (default: IVCV_RESULT_PATH or ./result)")
     parser.add_argument('--return_swp', action="store_true", help="Return sweep")
     parser.add_argument('--dryrun', action="store_true", help="Dry run with only switching matrix operation")
     parser.add_argument('--smu', default=None, help="SMU resource")
@@ -43,7 +44,7 @@ def main():
 
     measure_all(
         args.port, args.Vstart, args.Vend, args.Vstep, args.Icompliance,
-        args.basepath, args.sensorname,
+        resolve_result_path(args.resultpath), args.sensorname,
         args.smu, args.pau,
         args.items, args.return_swp, args.dryrun,
     )

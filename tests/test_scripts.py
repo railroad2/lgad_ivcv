@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from scripts import cv_all, iv_all, iv_col, iv_row
+from scripts import cv_all, iv_all, iv_col, iv_row, iv_selected
 
 
 class ScriptLifecycleTests(unittest.TestCase):
@@ -60,6 +60,32 @@ class ScriptLifecycleTests(unittest.TestCase):
             )
         col_runner.measure_col.assert_called_once_with([3, 4])
         col_runner.__exit__.assert_called_once()
+
+    def test_selected_script_measures_only_requested_channels(self):
+        runner = self._runner()
+        with patch.object(iv_selected, "IV_sw", return_value=runner):
+            iv_selected.measure_selected(
+                "ws://test:8765", 0, -10, 1, 1e-5,
+                "/tmp/result", "sensor", [3, 17, 255],
+                dryrun=True,
+            )
+
+        runner.measure_channel.assert_called_once_with([3, 17, 255])
+        runner.measure_all_channels.assert_not_called()
+        runner.__exit__.assert_called_once()
+
+    def test_selected_script_requires_channels(self):
+        with self.assertRaisesRegex(ValueError, "at least one channel"):
+            iv_selected.measure_selected(
+                "ws://test:8765", 0, -10, 1, 1e-5,
+                "/tmp/result", "sensor", [],
+                dryrun=True,
+            )
+
+    def test_selected_channel_argument_range(self):
+        self.assertEqual(iv_selected.channel_number("255"), 255)
+        with self.assertRaisesRegex(Exception, "between 0 and 255"):
+            iv_selected.channel_number("256")
 
 
 if __name__ == "__main__":

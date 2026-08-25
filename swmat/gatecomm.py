@@ -1,11 +1,7 @@
-from collections.abc import Iterable
-from typing import Optional, Union
+from typing import Optional
 
 try:
-    from swm_ctrl.websocket_client import (
-        PinInput,
-        WebSocketClientSync,
-    )
+    from swm_ctrl.websocket_client import WebSocketClientSync
 except ModuleNotFoundError as exc:
     if exc.name == "swm_ctrl":
         raise ModuleNotFoundError(
@@ -13,10 +9,6 @@ except ModuleNotFoundError as exc:
             "Install swm_ctrl or add its parent directory to PYTHONPATH."
         ) from exc
     raise
-
-
-PinCollection = Union[PinInput, Iterable[PinInput]]
-
 
 class GateComm(WebSocketClientSync):
     """SWmat compatibility layer over swm_ctrl.WebSocketClientSync."""
@@ -35,15 +27,3 @@ class GateComm(WebSocketClientSync):
             timeout=timeout,
             connect_timeout=connect_timeout,
         )
-
-    @staticmethod
-    def _pin_args(pins: PinCollection):
-        if isinstance(pins, (str, int)):
-            return (pins,)
-        return tuple(pins)
-
-    def on(self, pins: PinCollection):
-        return super().on(*self._pin_args(pins))
-
-    def off(self, pins: PinCollection):
-        return super().off(*self._pin_args(pins))

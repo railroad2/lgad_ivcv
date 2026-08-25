@@ -48,12 +48,14 @@ class IVWorker(QObject):
         runner = self._runner
         if runner is not None:
             runner.request_stop()
-        self.status_changed.emit("안전하게 측정을 중단하는 중입니다...")
+        self.status_changed.emit("Stopping the measurement safely...")
 
     def _channel_started(self, channel, index, total):
         self._current_channel = channel
         self.channel_started.emit(channel, index, total)
-        self.status_changed.emit(f"채널 {channel} 측정 중 ({index + 1}/{total})")
+        self.status_changed.emit(
+            f"Measuring channel {channel} ({index + 1}/{total})"
+        )
 
     def _channel_completed(self, channel, index, total):
         self.channel_completed.emit(channel, index, total)
@@ -74,7 +76,9 @@ class IVWorker(QObject):
     def run(self):
         config = self.config
         try:
-            self.status_changed.emit("장비와 switching matrix에 연결하는 중입니다...")
+            self.status_changed.emit(
+                "Connecting to the instruments and switching matrix..."
+            )
             with IV_sw(config.port, config.dry_run) as runner:
                 self._runner = runner
                 runner.iv.set_data_callback(self._point_measured)

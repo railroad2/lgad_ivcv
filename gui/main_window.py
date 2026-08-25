@@ -1,5 +1,6 @@
 import math
 import os
+from datetime import datetime
 
 import numpy as np
 import pyqtgraph as pg
@@ -63,35 +64,36 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(central)
         self.setStatusBar(QStatusBar())
-        self.statusBar().showMessage("준비")
+        self.statusBar().showMessage("Ready")
 
     def _build_settings_row(self):
         row = QHBoxLayout()
 
-        connection = QGroupBox("장비 연결")
+        connection = QGroupBox("Instrument connection")
         connection_form = QFormLayout(connection)
         self.port_edit = QLineEdit("ws://210.119.41.69:8765")
         self.smu_edit = QLineEdit()
-        self.smu_edit.setPlaceholderText("비워 두면 자동 검색")
+        self.smu_edit.setPlaceholderText("Leave blank for automatic discovery")
         self.pau_edit = QLineEdit()
-        self.pau_edit.setPlaceholderText("비워 두면 자동 검색")
+        self.pau_edit.setPlaceholderText("Leave blank for automatic discovery")
         self.dry_run_check = QCheckBox("Dry run")
         connection_form.addRow("Switching matrix", self.port_edit)
         connection_form.addRow("SMU VISA resource", self.smu_edit)
         connection_form.addRow("PAU VISA resource", self.pau_edit)
         connection_form.addRow("", self.dry_run_check)
 
-        measurement = QGroupBox("IV 측정 설정")
+        measurement = QGroupBox("IV measurement settings")
         measurement_form = QFormLayout(measurement)
         self.sensor_edit = QLineEdit("test")
         self.start_voltage_spin = self._voltage_spin(0.0)
         self.end_voltage_spin = self._voltage_spin(-10.0)
         self.step_spin = QDoubleSpinBox()
-        self.step_spin.setDecimals(4)
-        self.step_spin.setRange(0.0001, 1000.0)
+        self.step_spin.setDecimals(1)
+        self.step_spin.setRange(0.1, 1000.0)
+        self.step_spin.setSingleStep(0.1)
         self.step_spin.setValue(1.0)
         self.compliance_edit = QLineEdit("1e-5")
-        self.return_sweep_check = QCheckBox("0 V 방향 return sweep 수행")
+        self.return_sweep_check = QCheckBox("Return sweep toward 0 V")
         measurement_form.addRow("Sensor name", self.sensor_edit)
         measurement_form.addRow("Start voltage (V)", self.start_voltage_spin)
         measurement_form.addRow("End voltage (V)", self.end_voltage_spin)
@@ -99,18 +101,18 @@ class MainWindow(QMainWindow):
         measurement_form.addRow("Current compliance (A)", self.compliance_edit)
         measurement_form.addRow("", self.return_sweep_check)
 
-        output = QGroupBox("결과 저장")
+        output = QGroupBox("Result storage")
         output_form = QFormLayout(output)
         self.result_path_edit = QLineEdit(resolve_result_path())
-        self.browse_button = QPushButton("폴더 선택...")
+        self.browse_button = QPushButton("Browse...")
         self.browse_button.clicked.connect(self._browse_result_path)
         result_row = QHBoxLayout()
         result_row.addWidget(self.result_path_edit, 1)
         result_row.addWidget(self.browse_button)
         output_form.addRow("Result path", result_row)
         env_path = os.environ.get("IVCV_RESULT_PATH")
-        source = "IVCV_RESULT_PATH" if env_path else "기본값 ./result"
-        output_form.addRow("초기값 출처", QLabel(source))
+        source = "IVCV_RESULT_PATH" if env_path else "Default: ./result"
+        output_form.addRow("Initial value source", QLabel(source))
 
         row.addWidget(connection, 1)
         row.addWidget(measurement, 1)
@@ -120,19 +122,20 @@ class MainWindow(QMainWindow):
     @staticmethod
     def _voltage_spin(value):
         spin = QDoubleSpinBox()
-        spin.setDecimals(4)
+        spin.setDecimals(1)
         spin.setRange(-1000.0, 0.0)
+        spin.setSingleStep(0.1)
         spin.setValue(value)
         return spin
 
     def _build_channel_panel(self):
-        group = QGroupBox("측정 채널")
+        group = QGroupBox("Measurement channels")
         layout = QVBoxLayout(group)
 
         controls = QHBoxLayout()
-        self.select_all_button = QPushButton("전체 선택")
-        self.clear_all_button = QPushButton("전체 해제")
-        self.channel_count_label = QLabel("256개 선택")
+        self.select_all_button = QPushButton("Select all")
+        self.clear_all_button = QPushButton("Clear all")
+        self.channel_count_label = QLabel("256 selected")
         self.select_all_button.clicked.connect(self.channel_grid_select_all)
         self.clear_all_button.clicked.connect(self.channel_grid_clear_all)
         controls.addWidget(self.select_all_button)
@@ -158,7 +161,7 @@ class MainWindow(QMainWindow):
     def _build_output_panel(self):
         widget = QWidget()
         layout = QVBoxLayout(widget)
-        graph_group = QGroupBox("실시간 IV")
+        graph_group = QGroupBox("Live IV")
         graph_layout = QVBoxLayout(graph_group)
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setLabel("bottom", "Bias voltage", units="V")
@@ -171,12 +174,12 @@ class MainWindow(QMainWindow):
         self.smu_curve = self.plot_widget.plot(
             pen=pg.mkPen("#e6a23c", width=2), name="SMU"
         )
-        self.log_scale_check = QCheckBox("Y축 log (절댓값)")
+        self.log_scale_check = QCheckBox("Log Y axis (absolute values)")
         self.log_scale_check.toggled.connect(self._refresh_plot)
         graph_layout.addWidget(self.plot_widget, 1)
         graph_layout.addWidget(self.log_scale_check)
 
-        log_group = QGroupBox("상태 로그")
+        log_group = QGroupBox("Status log")
         log_layout = QVBoxLayout(log_group)
         self.log_edit = QTextEdit()
         self.log_edit.setReadOnly(True)
@@ -189,12 +192,12 @@ class MainWindow(QMainWindow):
 
     def _build_control_row(self):
         row = QHBoxLayout()
-        self.start_button = QPushButton("측정 시작")
-        self.stop_button = QPushButton("측정 중단 / Output Off")
+        self.start_button = QPushButton("Start measurement")
+        self.stop_button = QPushButton("Stop measurement / Output Off")
         self.stop_button.setStyleSheet("color: #b00020; font-weight: bold;")
         self.channel_progress = QProgressBar()
         self.point_progress = QProgressBar()
-        self.channel_progress.setFormat("채널 %v/%m")
+        self.channel_progress.setFormat("Channel %v/%m")
         self.point_progress.setFormat("Sweep %v/%m")
         self.channel_progress.setRange(0, 256)
         self.point_progress.setRange(0, 1)
@@ -207,12 +210,12 @@ class MainWindow(QMainWindow):
         return row
 
     def _channel_selection_changed(self, count):
-        self.channel_count_label.setText(f"{count}개 선택")
+        self.channel_count_label.setText(f"{count} selected")
 
     def _browse_result_path(self):
         path = QFileDialog.getExistingDirectory(
             self,
-            "결과 저장 폴더",
+            "Select result directory",
             self.result_path_edit.text() or ".",
         )
         if path:
@@ -230,25 +233,25 @@ class MainWindow(QMainWindow):
         channels = tuple(self.channel_grid.selected_channels())
 
         if not port:
-            raise ValueError("Switching matrix port를 입력해 주세요.")
+            raise ValueError("Enter a switching matrix port.")
         if not sensor_name:
-            raise ValueError("Sensor name을 입력해 주세요.")
+            raise ValueError("Enter a sensor name.")
         if not result_path:
-            raise ValueError("Result path를 입력해 주세요.")
+            raise ValueError("Enter a result path.")
         if not channels:
-            raise ValueError("측정할 채널을 하나 이상 선택해 주세요.")
+            raise ValueError("Select at least one measurement channel.")
 
         try:
             compliance = float(self.compliance_edit.text())
         except ValueError as exc:
-            raise ValueError("Current compliance는 숫자여야 합니다.") from exc
+            raise ValueError("Current compliance must be numeric.") from exc
         if not math.isfinite(compliance) or compliance <= 0:
-            raise ValueError("Current compliance는 유한한 양수여야 합니다.")
+            raise ValueError("Current compliance must be a finite positive value.")
 
         start_voltage = self.start_voltage_spin.value()
         end_voltage = self.end_voltage_spin.value()
         if start_voltage > 0 or end_voltage > 0:
-            raise ValueError("IV bias voltage는 0 V 이하여야 합니다.")
+            raise ValueError("IV bias voltage must be 0 V or below.")
 
         return IVRunConfig(
             port=port,
@@ -269,7 +272,7 @@ class MainWindow(QMainWindow):
         try:
             config = self._make_config()
         except ValueError as exc:
-            QMessageBox.warning(self, "측정 설정 확인", str(exc))
+            QMessageBox.warning(self, "Check measurement settings", str(exc))
             return
 
         self._save_settings()
@@ -302,14 +305,14 @@ class MainWindow(QMainWindow):
         self._thread = thread
         self._worker = worker
         self._set_running(True)
-        self._append_log(f"측정 시작: {len(config.channels)}개 채널")
+        self._append_log(f"Measurement started: {len(config.channels)} channel(s)")
         thread.start()
 
     def _stop_measurement(self):
         if self._worker is None:
             return
         self.stop_button.setEnabled(False)
-        self._append_log("사용자가 안전 중단을 요청했습니다.")
+        self._append_log("Safe stop requested by user.")
         self._worker.request_stop()
 
     def _channel_started(self, channel, index, total):
@@ -321,11 +324,13 @@ class MainWindow(QMainWindow):
         self.point_progress.setValue(0)
         self.channel_progress.setRange(0, total)
         self.channel_progress.setValue(index)
-        self._append_log(f"채널 {channel} 측정 시작 ({index + 1}/{total})")
+        self._append_log(
+            f"Channel {channel} measurement started ({index + 1}/{total})."
+        )
 
     def _channel_completed(self, channel, index, total):
         self.channel_progress.setValue(index + 1)
-        self._append_log(f"채널 {channel} 측정 완료")
+        self._append_log(f"Channel {channel} measurement completed.")
 
     def _point_measured(self, channel, voltage, current_pau, current_smu, index, total):
         self._plot_voltage.append(voltage)
@@ -335,7 +340,7 @@ class MainWindow(QMainWindow):
         self.point_progress.setValue(index)
         self._refresh_plot()
         self.statusBar().showMessage(
-            f"채널 {channel}: {voltage:g} V, PAU {current_pau:.4g} A, "
+            f"Channel {channel}: {voltage:.1f} V, PAU {current_pau:.4g} A, "
             f"SMU {current_smu:.4g} A"
         )
 
@@ -351,20 +356,26 @@ class MainWindow(QMainWindow):
 
     def _measurement_completed(self, stopped, result_path):
         if stopped:
-            message = "측정이 안전하게 중단되었습니다."
+            message = "Measurement stopped safely."
         else:
-            message = "모든 IV 측정이 완료되었습니다."
+            message = "All IV measurements completed."
         self._append_log(message)
-        self._append_log(f"결과 위치: {result_path}")
-        self.statusBar().showMessage(message)
+        self._append_log(f"Result path: {result_path}")
+        self.statusBar().showMessage(
+            "Measurement stopped safely."
+            if stopped
+            else "All IV measurements completed."
+        )
 
     def _measurement_failed(self, message):
-        self._append_log(f"측정 실패: {message}")
-        self.statusBar().showMessage("측정 실패 — 출력 안전 종료를 수행했습니다.")
+        self._append_log(f"Measurement failed: {message}")
+        self.statusBar().showMessage(
+            "Measurement failed — safe output shutdown was attempted."
+        )
         QMessageBox.critical(
             self,
-            "IV 측정 실패",
-            f"{message}\n\n0 V, output off 및 switch off_all을 시도했습니다.",
+            "IV measurement failed",
+            f"{message}\n\nAttempted 0 V, output off, and switch off_all.",
         )
 
     def _thread_finished(self):
@@ -376,7 +387,8 @@ class MainWindow(QMainWindow):
             thread.deleteLater()
 
     def _append_log(self, message):
-        self.log_edit.append(message.rstrip())
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        self.log_edit.append(f"[{timestamp}] {message.rstrip()}")
 
     def _set_running(self, running):
         self.start_button.setEnabled(not running)
@@ -445,8 +457,8 @@ class MainWindow(QMainWindow):
             self._stop_measurement()
             QMessageBox.information(
                 self,
-                "측정 중단 중",
-                "출력을 안전하게 종료한 뒤 창을 닫아 주세요.",
+                "Stopping measurement",
+                "Wait for safe output shutdown before closing the window.",
             )
             event.ignore()
             return

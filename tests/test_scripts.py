@@ -3,6 +3,7 @@ from unittest.mock import MagicMock, patch
 
 from scripts import (
     cv_all,
+    cv_once,
     cv_selected,
     iv_all,
     iv_col,
@@ -137,6 +138,29 @@ class ScriptLifecycleTests(unittest.TestCase):
         runner.set_sweep.assert_called_once_with(0, -20, 2, True)
         runner.set_compliance.assert_called_once_with(1e-6)
         runner.measure_Vsweep.assert_called_once_with(
+            0,
+            0,
+            target_label="single",
+        )
+        runner.swm.assert_not_called()
+        runner.__exit__.assert_called_once()
+
+    def test_cv_once_runs_without_switching_matrix_selection(self):
+        runner = self._runner()
+        with patch.object(cv_once, "CV_sw", return_value=runner) as factory:
+            cv_once.measure_once(
+                0, -30, 3,
+                "/tmp/result", "sensor",
+                rlcr="LCR", rpau="PAU", return_swp=True,
+            )
+
+        factory.assert_called_once_with(port=None, dryrun=False)
+        runner.set_lcr.assert_called_once_with("LCR")
+        runner.set_pau.assert_called_once_with("PAU")
+        runner.set_basepath.assert_called_once_with("/tmp/result")
+        runner.set_sensor_name.assert_called_once_with("sensor")
+        runner.set_sweep.assert_called_once_with(0, -30, 3, True)
+        runner.measure.assert_called_once_with(
             0,
             0,
             target_label="single",

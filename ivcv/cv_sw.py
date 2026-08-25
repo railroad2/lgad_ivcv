@@ -86,7 +86,7 @@ class CV_sw:
         self.dv = dv
         self.return_swp = return_swp
 
-    def measure(self, row=0, col=0):
+    def measure(self, row=0, col=0, target_label=None):
         v0, v1, dv = self.v0, self.v1, self.dv
         return_swp = self.return_swp
         rt_plot = self.rt_plot
@@ -95,6 +95,7 @@ class CV_sw:
         freq = self.freq
 
         cv = self.cv
+        cv.set_measurement_target_label(target_label)
 
         if self.dryrun:
             print(f"   dry run CV: row={row}, col={col}")

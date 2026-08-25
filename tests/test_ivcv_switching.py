@@ -112,6 +112,23 @@ class SwitchingMeasurementTests(unittest.TestCase):
 
             self.assertEqual(runner.swm.calls, [("off_all",), ("close",)])
 
+    def test_cv_measurement_sets_single_target_label(self):
+        runner = CV_sw.__new__(CV_sw)
+        runner.cv = Mock()
+        runner.dryrun = True
+        runner.v0 = 0
+        runner.v1 = -10
+        runner.dv = 1
+        runner.return_swp = False
+        runner.rt_plot = False
+        runner.ac_level = 0.1
+        runner.freq = 1000
+
+        with patch("builtins.print"):
+            runner.measure(0, 0, target_label="single")
+
+        runner.cv.set_measurement_target_label.assert_called_once_with("single")
+
 
 if __name__ == "__main__":
     unittest.main()

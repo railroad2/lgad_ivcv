@@ -195,12 +195,20 @@ class FakeCVRunner:
         pass
 
     def measure_channel(self, channels, on_channel_start, on_channel_complete):
-        channel = channels[0]
-        on_channel_start(channel, 0, 1)
+        self._measure(channels[0], on_channel_start, on_channel_complete)
+
+    def measure_rows(self, rows, on_row_start, on_row_complete):
+        self._measure(rows[0], on_row_start, on_row_complete)
+
+    def measure_col(self, cols, on_col_start, on_col_complete):
+        self._measure(cols[0], on_col_start, on_col_complete)
+
+    def _measure(self, target, on_start, on_complete):
+        on_start(target, 0, 1)
         point = [-1.0, 2e-12, 3e6, 4e-9]
         self.cv.output_arr.append(point)
         self.cv.callback(point)
-        on_channel_complete(channel, 0, 1)
+        on_complete(target, 0, 1)
 
     def stop_requested(self):
         return False
@@ -253,39 +261,45 @@ class IVWorkerTests(unittest.TestCase):
 
 @unittest.skipIf(QApplication is None, "PySide6 is not installed")
 class CVWorkerTests(unittest.TestCase):
-    def test_worker_emits_cv_progress_and_measurement_point(self):
-        config = CVRunConfig(
-            port="ws://test:8765",
-            lcr_resource=None,
-            pau_resource=None,
-            sensor_name="sensor",
-            result_path="/tmp/result",
-            start_voltage=0,
-            end_voltage=-10,
-            voltage_step=1,
-            ac_level=0.1,
-            frequency=1000,
-            return_sweep=False,
-            dry_run=True,
-            targets=(7,),
-        )
-        worker = CVWorker(config)
-        points = []
-        starts = []
-        completions = []
-        worker.point_measured.connect(lambda *args: points.append(args))
-        worker.target_started.connect(lambda *args: starts.append(args))
-        worker.completed.connect(lambda *args: completions.append(args))
+    def test_worker_dispatches_all_cv_measurement_modes(self):
+        for mode, target in (("channel", 7), ("row", 2), ("column", 3)):
+            with self.subTest(mode=mode):
+                config = CVRunConfig(
+                    port="ws://test:8765",
+                    lcr_resource=None,
+                    pau_resource=None,
+                    sensor_name="sensor",
+                    result_path="/tmp/result",
+                    start_voltage=0,
+                    end_voltage=-10,
+                    voltage_step=1,
+                    ac_level=0.1,
+                    frequency=1000,
+                    return_sweep=False,
+                    dry_run=True,
+                    measurement_mode=mode,
+                    targets=(target,),
+                )
+                worker = CVWorker(config)
+                points = []
+                starts = []
+                completions = []
+                worker.point_measured.connect(lambda *args: points.append(args))
+                worker.target_started.connect(lambda *args: starts.append(args))
+                worker.completed.connect(lambda *args: completions.append(args))
 
-        with patch("lgad_ivcv.gui.cv_worker.CV_sw", FakeCVRunner):
-            worker.run()
+                with patch("lgad_ivcv.gui.cv_worker.CV_sw", FakeCVRunner):
+                    worker.run()
 
-        self.assertEqual(starts, [(7, 0, 1)])
-        self.assertEqual(
-            points,
-            [(7, -1.0, 2e-12, 3e6, 4e-9, 1, 1)],
-        )
-        self.assertEqual(completions, [(False, "/tmp/result/measurement")])
+                self.assertEqual(starts, [(mode, target, 0, 1)])
+                self.assertEqual(
+                    points,
+                    [(mode, target, -1.0, 2e-12, 3e6, 4e-9, 1, 1)],
+                )
+                self.assertEqual(
+                    completions,
+                    [(False, "/tmp/result/measurement")],
+                )
 
 
 @unittest.skipIf(QApplication is None, "PySide6 is not installed")
@@ -325,12 +339,59 @@ class MainWindowTests(unittest.TestCase):
         config = window._make_cv_config()
 
         self.assertEqual(config.targets, (18,))
+        self.assertEqual(config.measurement_mode, "channel")
         self.assertEqual(config.sensor_name, "cv_sensor")
         self.assertEqual(config.lcr_resource, "GPIB0::10::INSTR")
         self.assertEqual(config.ac_level, 0.1)
         self.assertEqual(config.frequency, 1000.0)
 
         window.close()
+
+    def test_cv_tab_selects_rows_and_columns_as_measurement_targets(self):
+        window = MainWindow()
+        window.measurement_tabs.setCurrentIndex(1)
+        window.channel_grid.clear_all()
+
+        window.cv_measurement_mode_combo.setCurrentIndex(1)
+        window.channel_grid.toggle_row(2)
+        row_config = window._make_cv_config()
+        self.assertEqual(row_config.measurement_mode, "row")
+        self.assertEqual(row_config.targets, (2,))
+
+        window.channel_grid.clear_all()
+        window.cv_measurement_mode_combo.setCurrentIndex(2)
+        window.channel_grid.toggle_col(3)
+        column_config = window._make_cv_config()
+        self.assertEqual(column_config.measurement_mode, "column")
+        self.assertEqual(column_config.targets, (3,))
+
+        window.close()
+
+    def test_iv_and_cv_share_one_environment_first_result_path(self):
+        settings = QSettings()
+        settings.clear()
+        settings.setValue("result_path", "/saved/result")
+        settings.setValue("iv/result_path", "/legacy/iv")
+        settings.setValue("cv/result_path", "/legacy/cv")
+
+        with patch.dict(
+            os.environ,
+            {"IVCV_RESULT_PATH": "/environment/result"},
+        ):
+            window = MainWindow()
+
+        self.assertEqual(window.result_path_edit.text(), "/environment/result")
+        self.assertEqual(window.cv_result_path_edit.text(), "/environment/result")
+
+        window.cv_result_path_edit.setText("/shared/result")
+        self.assertEqual(window.result_path_edit.text(), "/shared/result")
+        window._save_settings()
+        self.assertEqual(settings.value("result_path"), "/shared/result")
+        self.assertFalse(settings.contains("iv/result_path"))
+        self.assertFalse(settings.contains("cv/result_path"))
+
+        window.close()
+        settings.clear()
 
     def test_main_window_has_iv_and_cv_tabs_and_file_exit(self):
         window = MainWindow()

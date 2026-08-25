@@ -27,14 +27,15 @@ measurements, live PAU/SMU plots, per-target and sweep progress, and safe
 measurement cancellation. Row-wise and column-wise modes connect all 16
 channels in each selected row or column during one sweep.
 
-The `CV` tab measures the selected individual channels with an LCR meter. It
-supports configurable bias sweep, AC level, and frequency, plus an optional
-PAU for external bias. Without a PAU, the GUI rejects bias settings below the
-LCR meter's -40 V limit. Live capacitance and resistance plots open when a CV
-measurement starts.
+The `CV` tab measures individual channels, complete rows, or complete columns
+with an LCR meter. It supports configurable bias sweep, AC level, and
+frequency, plus an optional PAU for external bias. Without a PAU, the GUI
+rejects bias settings below the LCR meter's -40 V limit. Live capacitance and
+resistance plots open when a CV measurement starts.
 
-The initial result directory follows `IVCV_RESULT_PATH` when it is set,
-otherwise it is `./result`.
+The IV and CV tabs share one result directory setting. `IVCV_RESULT_PATH` takes
+priority when it is set; otherwise the GUI restores the shared saved value or
+uses `./result` initially.
 
 The channel selector is an independent window that opens with the main window.
 The independent Live IV or Live CV window opens automatically when its

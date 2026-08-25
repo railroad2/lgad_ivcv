@@ -69,6 +69,11 @@ class MainWindow(QMainWindow):
         self.measurement_mode_combo.currentIndexChanged.connect(
             self._measurement_mode_changed
         )
+        self.cv_measurement_mode_combo.currentIndexChanged.connect(
+            self._cv_measurement_mode_changed
+        )
+        self.result_path_edit.textChanged.connect(self.cv_result_path_edit.setText)
+        self.cv_result_path_edit.textChanged.connect(self.result_path_edit.setText)
         self.measurement_tabs.currentChanged.connect(self._measurement_tab_changed)
         self._load_settings()
         self._measurement_tab_changed(self.measurement_tabs.currentIndex())
@@ -147,6 +152,14 @@ class MainWindow(QMainWindow):
 
         measurement = QGroupBox("CV measurement settings")
         measurement_form = QFormLayout(measurement)
+        self.cv_measurement_mode_combo = QComboBox()
+        self.cv_measurement_mode_combo.addItem("Individual channels", "channel")
+        self.cv_measurement_mode_combo.addItem("Row-wise", "row")
+        self.cv_measurement_mode_combo.addItem("Column-wise", "column")
+        self.cv_measurement_mode_combo.setToolTip(
+            "Row-wise and Column-wise modes connect all 16 channels in each "
+            "selected row or column during one sweep."
+        )
         self.cv_sensor_edit = QLineEdit("test")
         self.cv_open_channels_button = QPushButton("Select channels...")
         self.cv_open_channels_button.clicked.connect(self._show_channel_window)
@@ -172,6 +185,7 @@ class MainWindow(QMainWindow):
         self.cv_frequency_spin.setSingleStep(100.0)
         self.cv_frequency_spin.setValue(1000.0)
         self.cv_return_sweep_check = QCheckBox("Return sweep toward 0 V")
+        measurement_form.addRow("Measurement mode", self.cv_measurement_mode_combo)
         measurement_form.addRow("Measurement targets", channel_row)
         measurement_form.addRow("Sensor name", self.cv_sensor_edit)
         measurement_form.addRow("Start voltage (V)", self.cv_start_voltage_spin)
@@ -437,8 +451,10 @@ class MainWindow(QMainWindow):
 
     def _channel_selection_changed(self, _count=None):
         if self.measurement_tabs.currentIndex() == 1:
-            count = len(self.channel_grid.selected_channels())
-            selection_text = f"{count} channels selected"
+            mode = self.cv_measurement_mode_combo.currentData() or "channel"
+            plural = self.MODE_LABELS[mode][1]
+            count = len(self.channel_grid.selected_targets())
+            selection_text = f"{count} {plural} selected"
             self.channel_count_label.setText(selection_text)
             self.cv_selection_summary_label.setText(selection_text)
             return
@@ -461,10 +477,20 @@ class MainWindow(QMainWindow):
             len(self.channel_grid.selected_targets())
         )
 
+    def _cv_measurement_mode_changed(self, _index=None):
+        if self.measurement_tabs.currentIndex() != 1:
+            return
+        mode = self.cv_measurement_mode_combo.currentData() or "channel"
+        singular, _plural = self.MODE_LABELS[mode]
+        self.channel_grid.set_selection_mode(mode)
+        self.cv_channel_progress.setFormat(f"{singular} %v/%m")
+        self._channel_selection_changed(
+            len(self.channel_grid.selected_targets())
+        )
+
     def _measurement_tab_changed(self, index):
         if index == 1:
-            self.channel_grid.set_selection_mode("channel")
-            self._channel_selection_changed()
+            self._cv_measurement_mode_changed()
         else:
             self._measurement_mode_changed()
 
@@ -480,7 +506,7 @@ class MainWindow(QMainWindow):
     def _browse_cv_result_path(self):
         path = QFileDialog.getExistingDirectory(
             self,
-            "Select CV result directory",
+            "Select result directory",
             self.cv_result_path_edit.text() or ".",
         )
         if path:
@@ -540,7 +566,8 @@ class MainWindow(QMainWindow):
         port = self.cv_port_edit.text().strip()
         sensor_name = self.cv_sensor_edit.text().strip()
         result_path = self.cv_result_path_edit.text().strip()
-        targets = tuple(self.channel_grid.selected_channels())
+        measurement_mode = self.cv_measurement_mode_combo.currentData()
+        targets = tuple(self.channel_grid.selected_targets())
 
         if not port:
             raise ValueError("Enter a switching matrix port.")
@@ -549,7 +576,8 @@ class MainWindow(QMainWindow):
         if not result_path:
             raise ValueError("Enter a result path.")
         if not targets:
-            raise ValueError("Select at least one measurement channel.")
+            plural = self.MODE_LABELS[measurement_mode][1]
+            raise ValueError(f"Select at least one measurement {plural[:-1]}.")
 
         start_voltage = self.cv_start_voltage_spin.value()
         end_voltage = self.cv_end_voltage_spin.value()
@@ -575,6 +603,7 @@ class MainWindow(QMainWindow):
             frequency=self.cv_frequency_spin.value(),
             return_sweep=self.cv_return_sweep_check.isChecked(),
             dry_run=self.cv_dry_run_check.isChecked(),
+            measurement_mode=measurement_mode,
             targets=targets,
         )
 
@@ -671,7 +700,8 @@ class MainWindow(QMainWindow):
         self._set_running(True, "cv")
         self._show_live_cv_window()
         self._append_cv_log(
-            f"CV measurement started: {len(config.targets)} channels"
+            f"CV measurement started: {len(config.targets)} "
+            f"{self.MODE_LABELS[config.measurement_mode][1]}"
         )
         thread.start()
 
@@ -724,7 +754,7 @@ class MainWindow(QMainWindow):
         singular = self.MODE_LABELS[mode][0]
         self._append_log(f"{singular} {target} measurement completed.")
 
-    def _cv_target_started(self, target, index, total):
+    def _cv_target_started(self, mode, target, index, total):
         self._cv_plot_voltage.clear()
         self._cv_plot_capacitance.clear()
         self._cv_plot_resistance.clear()
@@ -733,13 +763,15 @@ class MainWindow(QMainWindow):
         self.cv_point_progress.setValue(0)
         self.cv_channel_progress.setRange(0, total)
         self.cv_channel_progress.setValue(index)
+        singular = self.MODE_LABELS[mode][0]
         self._append_cv_log(
-            f"Channel {target} CV measurement started ({index + 1}/{total})."
+            f"{singular} {target} CV measurement started ({index + 1}/{total})."
         )
 
-    def _cv_target_completed(self, target, index, total):
+    def _cv_target_completed(self, mode, target, index, total):
         self.cv_channel_progress.setValue(index + 1)
-        self._append_cv_log(f"Channel {target} CV measurement completed.")
+        singular = self.MODE_LABELS[mode][0]
+        self._append_cv_log(f"{singular} {target} CV measurement completed.")
 
     def _point_measured(
         self,
@@ -775,6 +807,7 @@ class MainWindow(QMainWindow):
 
     def _cv_point_measured(
         self,
+        mode,
         target,
         voltage,
         capacitance,
@@ -789,8 +822,9 @@ class MainWindow(QMainWindow):
         self.cv_point_progress.setRange(0, max(total, 1))
         self.cv_point_progress.setValue(index)
         self._refresh_cv_plot()
+        singular = self.MODE_LABELS[mode][0]
         self.statusBar().showMessage(
-            f"Channel {target}: {voltage:.1f} V, "
+            f"{singular} {target}: {voltage:.1f} V, "
             f"C {capacitance * 1e12:.4g} pF, R {resistance:.4g} Ohm, "
             f"PAU {current_pau:.4g} A"
         )
@@ -935,6 +969,7 @@ class MainWindow(QMainWindow):
             self.cv_lcr_edit,
             self.cv_pau_edit,
             self.cv_dry_run_check,
+            self.cv_measurement_mode_combo,
             self.cv_sensor_edit,
             self.cv_start_voltage_spin,
             self.cv_end_voltage_spin,
@@ -960,9 +995,19 @@ class MainWindow(QMainWindow):
         self.smu_edit.setText(self._settings.value("iv/smu", ""))
         self.pau_edit.setText(self._settings.value("iv/pau", ""))
         self.sensor_edit.setText(self._settings.value("iv/sensor", "test"))
-        self.result_path_edit.setText(
-            self._settings.value("iv/result_path", self.result_path_edit.text())
-        )
+        if "IVCV_RESULT_PATH" in os.environ:
+            result_path = resolve_result_path()
+        else:
+            result_path = self._settings.value("result_path")
+            if result_path is None:
+                result_path = self._settings.value(
+                    "iv/result_path",
+                    self._settings.value(
+                        "cv/result_path",
+                        resolve_result_path(),
+                    ),
+                )
+        self.result_path_edit.setText(result_path)
         self.start_voltage_spin.setValue(
             self._settings.value("iv/start_voltage", 0.0, type=float)
         )
@@ -988,9 +1033,6 @@ class MainWindow(QMainWindow):
         self.cv_lcr_edit.setText(self._settings.value("cv/lcr", ""))
         self.cv_pau_edit.setText(self._settings.value("cv/pau", ""))
         self.cv_sensor_edit.setText(self._settings.value("cv/sensor", "test"))
-        self.cv_result_path_edit.setText(
-            self._settings.value("cv/result_path", self.cv_result_path_edit.text())
-        )
         self.cv_start_voltage_spin.setValue(
             self._settings.value("cv/start_voltage", 0.0, type=float)
         )
@@ -1012,6 +1054,9 @@ class MainWindow(QMainWindow):
         self.cv_dry_run_check.setChecked(
             self._settings.value("cv/dry_run", False, type=bool)
         )
+        saved_cv_mode = self._settings.value("cv/measurement_mode", "channel")
+        cv_mode_index = self.cv_measurement_mode_combo.findData(saved_cv_mode)
+        self.cv_measurement_mode_combo.setCurrentIndex(max(cv_mode_index, 0))
         saved_mode = self._settings.value("iv/measurement_mode", "channel")
         mode_index = self.measurement_mode_combo.findData(saved_mode)
         self.measurement_mode_combo.setCurrentIndex(max(mode_index, 0))
@@ -1033,7 +1078,9 @@ class MainWindow(QMainWindow):
         self._settings.setValue("iv/smu", self.smu_edit.text())
         self._settings.setValue("iv/pau", self.pau_edit.text())
         self._settings.setValue("iv/sensor", self.sensor_edit.text())
-        self._settings.setValue("iv/result_path", self.result_path_edit.text())
+        self._settings.setValue("result_path", self.result_path_edit.text())
+        self._settings.remove("iv/result_path")
+        self._settings.remove("cv/result_path")
         self._settings.setValue("iv/start_voltage", self.start_voltage_spin.value())
         self._settings.setValue("iv/end_voltage", self.end_voltage_spin.value())
         self._settings.setValue("iv/voltage_step", self.step_spin.value())
@@ -1048,7 +1095,6 @@ class MainWindow(QMainWindow):
         self._settings.setValue("cv/lcr", self.cv_lcr_edit.text())
         self._settings.setValue("cv/pau", self.cv_pau_edit.text())
         self._settings.setValue("cv/sensor", self.cv_sensor_edit.text())
-        self._settings.setValue("cv/result_path", self.cv_result_path_edit.text())
         self._settings.setValue(
             "cv/start_voltage", self.cv_start_voltage_spin.value()
         )
@@ -1060,6 +1106,10 @@ class MainWindow(QMainWindow):
             "cv/return_sweep", self.cv_return_sweep_check.isChecked()
         )
         self._settings.setValue("cv/dry_run", self.cv_dry_run_check.isChecked())
+        self._settings.setValue(
+            "cv/measurement_mode",
+            self.cv_measurement_mode_combo.currentData(),
+        )
         self._settings.setValue("gui/main_window_geometry_v3", self.saveGeometry())
         self._settings.setValue(
             "gui/channel_window_geometry_v3", self.channel_window.saveGeometry()

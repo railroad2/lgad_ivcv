@@ -197,5 +197,97 @@ class CV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to turn off all switches: {exc}")
 
+    def measure_rows(
+        self,
+        rows=None,
+        verbose=1,
+        on_row_start=None,
+        on_row_complete=None,
+    ):
+        self.prepare_output_directory()
+        rows = list(range(16)) if rows is None or len(rows) == 0 else list(rows)
+
+        swm = self.swm
+        swm.off_all()
+        try:
+            for index, row in enumerate(rows):
+                if self.stop_requested():
+                    break
+
+                row = int(row)
+                if not 0 <= row < 16:
+                    raise ValueError(f"Row out of range: {row}")
+
+                if on_row_start is not None:
+                    on_row_start(row, index, len(rows))
+                if self.stop_requested():
+                    break
+
+                swm.on_row(row)
+                try:
+                    if verbose:
+                        print(swm.pinstat_all())
+                    self.measure(row, 0, target_label=f"row{row:02d}_allcol")
+                finally:
+                    swm.off_row(row)
+                    if verbose:
+                        print(swm.pinstat_all())
+
+                if on_row_complete is not None:
+                    on_row_complete(row, index, len(rows))
+                if self.stop_requested():
+                    break
+        finally:
+            try:
+                swm.off_all()
+            except Exception as exc:
+                print(f"WARNING: failed to turn off all switches: {exc}")
+
+    def measure_col(
+        self,
+        cols=None,
+        verbose=1,
+        on_col_start=None,
+        on_col_complete=None,
+    ):
+        self.prepare_output_directory()
+        cols = list(range(16)) if cols is None or len(cols) == 0 else list(cols)
+
+        swm = self.swm
+        swm.off_all()
+        try:
+            for index, col in enumerate(cols):
+                if self.stop_requested():
+                    break
+
+                col = int(col)
+                if not 0 <= col < 16:
+                    raise ValueError(f"Column out of range: {col}")
+
+                if on_col_start is not None:
+                    on_col_start(col, index, len(cols))
+                if self.stop_requested():
+                    break
+
+                swm.on_col(col)
+                try:
+                    if verbose:
+                        print(swm.pinstat_all())
+                    self.measure(0, col, target_label=f"allrow_col{col:02d}")
+                finally:
+                    swm.off_col(col)
+                    if verbose:
+                        print(swm.pinstat_all())
+
+                if on_col_complete is not None:
+                    on_col_complete(col, index, len(cols))
+                if self.stop_requested():
+                    break
+        finally:
+            try:
+                swm.off_all()
+            except Exception as exc:
+                print(f"WARNING: failed to turn off all switches: {exc}")
+
     def measure_all_channels(self):
         self.measure_channel(range(256))

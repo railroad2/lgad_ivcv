@@ -1,6 +1,6 @@
 import tempfile
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from lgad_ivcv.ivcv.cv_sw import CV_sw
 from lgad_ivcv.ivcv.iv_sw import IV_sw
@@ -131,6 +131,54 @@ class SwitchingMeasurementTests(unittest.TestCase):
 
         self.assertEqual(starts, [(3, 0, 2), (17, 1, 2)])
         self.assertEqual(completions, starts)
+
+    def test_cv_row_and_column_use_group_switching_and_target_labels(self):
+        runner = CV_sw.__new__(CV_sw)
+        runner.cv = FakeMeasurement()
+        runner.swm = FakeSwitchMatrix()
+        runner._stop_requested = None
+        runner.measure = Mock()
+        starts = []
+        completions = []
+
+        with patch("builtins.print"):
+            runner.measure_rows(
+                [2],
+                verbose=0,
+                on_row_start=lambda *args: starts.append(("row", *args)),
+                on_row_complete=lambda *args: completions.append(("row", *args)),
+            )
+            runner.measure_col(
+                [3],
+                verbose=0,
+                on_col_start=lambda *args: starts.append(("column", *args)),
+                on_col_complete=lambda *args: completions.append(
+                    ("column", *args)
+                ),
+            )
+
+        self.assertEqual(starts, [("row", 2, 0, 1), ("column", 3, 0, 1)])
+        self.assertEqual(completions, starts)
+        self.assertEqual(
+            runner.measure.call_args_list,
+            [
+                call(2, 0, target_label="row02_allcol"),
+                call(0, 3, target_label="allrow_col03"),
+            ],
+        )
+        self.assertEqual(
+            runner.swm.calls,
+            [
+                ("off_all",),
+                ("on_row", 2),
+                ("off_row", 2),
+                ("off_all",),
+                ("off_all",),
+                ("on_col", 3),
+                ("off_col", 3),
+                ("off_all",),
+            ],
+        )
 
     def test_coordinate_input_is_only_a_compatibility_conversion(self):
         iv_runner = IV_sw.__new__(IV_sw)

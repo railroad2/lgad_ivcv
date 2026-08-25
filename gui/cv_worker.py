@@ -22,6 +22,7 @@ class CVRunConfig:
     frequency: float
     return_sweep: bool
     dry_run: bool
+    measurement_mode: str
     targets: tuple
 
 
@@ -30,9 +31,9 @@ class CVWorker(QObject):
 
     status_changed = Signal(str)
     log_message = Signal(str)
-    target_started = Signal(int, int, int)
-    target_completed = Signal(int, int, int)
-    point_measured = Signal(int, float, float, float, float, int, int)
+    target_started = Signal(str, int, int, int)
+    target_completed = Signal(str, int, int, int)
+    point_measured = Signal(str, int, float, float, float, float, int, int)
     result_path_ready = Signal(str)
     completed = Signal(bool, str)
     failed = Signal(str)
@@ -53,18 +54,28 @@ class CVWorker(QObject):
 
     def _target_started(self, target, index, total):
         self._current_target = target
-        self.target_started.emit(target, index, total)
+        mode = self.config.measurement_mode
+        self.target_started.emit(mode, target, index, total)
+        target_name = {"channel": "channel", "row": "row", "column": "column"}[
+            mode
+        ]
         self.status_changed.emit(
-            f"Measuring CV channel {target} ({index + 1}/{total})"
+            f"Measuring CV {target_name} {target} ({index + 1}/{total})"
         )
 
     def _target_completed(self, target, index, total):
-        self.target_completed.emit(target, index, total)
+        self.target_completed.emit(
+            self.config.measurement_mode,
+            target,
+            index,
+            total,
+        )
 
     def _point_measured(self, point):
         voltage, capacitance, resistance, current_pau = point
         measurement = self._runner.cv
         self.point_measured.emit(
+            self.config.measurement_mode,
             self._current_target,
             float(voltage),
             float(capacitance),
@@ -105,11 +116,28 @@ class CVWorker(QObject):
                 if self._stop_event.is_set():
                     runner.request_stop()
 
-                runner.measure_channel(
-                    config.targets,
-                    on_channel_start=self._target_started,
-                    on_channel_complete=self._target_completed,
-                )
+                if config.measurement_mode == "channel":
+                    runner.measure_channel(
+                        config.targets,
+                        on_channel_start=self._target_started,
+                        on_channel_complete=self._target_completed,
+                    )
+                elif config.measurement_mode == "row":
+                    runner.measure_rows(
+                        config.targets,
+                        on_row_start=self._target_started,
+                        on_row_complete=self._target_completed,
+                    )
+                elif config.measurement_mode == "column":
+                    runner.measure_col(
+                        config.targets,
+                        on_col_start=self._target_started,
+                        on_col_complete=self._target_completed,
+                    )
+                else:
+                    raise ValueError(
+                        f"Unknown measurement mode: {config.measurement_mode}"
+                    )
                 stopped = self._stop_event.is_set() or runner.stop_requested()
                 result_dir = runner.cv.get_out_dir()
 

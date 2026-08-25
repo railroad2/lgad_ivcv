@@ -46,6 +46,10 @@ measurement starts. Use the `View` menu to reopen the channel selector and live
 plot windows; the status logs remain fixed in their respective main-window
 tabs.
 
+When the switching matrix uses the control WebSocket gateway, the GUI publishes
+the current measurement state and channel/row/column target progress for the
+web monitor. Voltage sweep points are not published.
+
 Each measurement session writes timestamped status messages to
 `IV_GUI_YYYY-MM-DDTHHMMSS_vN.log` or `CV_GUI_YYYY-MM-DDTHHMMSS_vN.log` in the
 same dated session directory as its data and plot files. If a finished,

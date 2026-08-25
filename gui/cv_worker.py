@@ -44,6 +44,7 @@ class CVWorker(QObject):
         self._stop_event = threading.Event()
         self._runner = None
         self._current_target = -1
+        self._completed_targets = 0
 
     def request_stop(self):
         self._stop_event.set()
@@ -62,13 +63,39 @@ class CVWorker(QObject):
         self.status_changed.emit(
             f"Measuring CV {target_name} {target} ({index + 1}/{total})"
         )
+        self._publish_measurement_status("running", target, index, total)
 
     def _target_completed(self, target, index, total):
+        self._completed_targets = index + 1
         self.target_completed.emit(
             self.config.measurement_mode,
             target,
             index,
             total,
+        )
+        self._publish_measurement_status("running", target, index + 1, total)
+
+    def _publish_measurement_status(
+        self,
+        status,
+        target=None,
+        completed=None,
+        total=None,
+    ):
+        runner = self._runner
+        swm = getattr(runner, "swm", None)
+        publisher = getattr(swm, "publish_measurement_status", None)
+        if publisher is None:
+            return
+        publisher(
+            status=status,
+            kind="CV",
+            mode=self.config.measurement_mode,
+            target=target,
+            completed=(
+                self._completed_targets if completed is None else completed
+            ),
+            total=len(self.config.targets) if total is None else total,
         )
 
     def _point_measured(self, point):
@@ -88,67 +115,79 @@ class CVWorker(QObject):
     @Slot()
     def run(self):
         config = self.config
+        runner = None
         try:
             self.status_changed.emit(
                 "Connecting to the LCR meter and switching matrix..."
             )
-            with CV_sw(config.port, config.dry_run) as runner:
-                self._runner = runner
-                runner.cv.set_data_callback(self._point_measured)
-                runner.set_basepath(config.result_path)
-                runner.set_sensor_name(config.sensor_name)
-                result_dir = runner.prepare_output_directory(
-                    config.measurement_mode
+            runner = CV_sw(config.port, config.dry_run)
+            self._runner = runner
+            self._publish_measurement_status("starting")
+            runner.cv.set_data_callback(self._point_measured)
+            runner.set_basepath(config.result_path)
+            runner.set_sensor_name(config.sensor_name)
+            result_dir = runner.prepare_output_directory(config.measurement_mode)
+            self.result_path_ready.emit(result_dir)
+
+            runner.set_lcr(config.lcr_resource)
+            if self._stop_event.is_set():
+                runner.request_stop()
+            runner.set_pau(config.pau_resource)
+            runner.set_sweep(
+                config.start_voltage,
+                config.end_voltage,
+                config.voltage_step,
+                config.return_sweep,
+            )
+            runner.ac_level = config.ac_level
+            runner.freq = config.frequency
+
+            if self._stop_event.is_set():
+                runner.request_stop()
+
+            if config.measurement_mode == "channel":
+                runner.measure_channel(
+                    config.targets,
+                    on_channel_start=self._target_started,
+                    on_channel_complete=self._target_completed,
                 )
-                self.result_path_ready.emit(result_dir)
-
-                runner.set_lcr(config.lcr_resource)
-                if self._stop_event.is_set():
-                    runner.request_stop()
-                runner.set_pau(config.pau_resource)
-                runner.set_sweep(
-                    config.start_voltage,
-                    config.end_voltage,
-                    config.voltage_step,
-                    config.return_sweep,
+            elif config.measurement_mode == "row":
+                runner.measure_rows(
+                    config.targets,
+                    on_row_start=self._target_started,
+                    on_row_complete=self._target_completed,
                 )
-                runner.ac_level = config.ac_level
-                runner.freq = config.frequency
-
-                if self._stop_event.is_set():
-                    runner.request_stop()
-
-                if config.measurement_mode == "channel":
-                    runner.measure_channel(
-                        config.targets,
-                        on_channel_start=self._target_started,
-                        on_channel_complete=self._target_completed,
-                    )
-                elif config.measurement_mode == "row":
-                    runner.measure_rows(
-                        config.targets,
-                        on_row_start=self._target_started,
-                        on_row_complete=self._target_completed,
-                    )
-                elif config.measurement_mode == "column":
-                    runner.measure_col(
-                        config.targets,
-                        on_col_start=self._target_started,
-                        on_col_complete=self._target_completed,
-                    )
-                else:
-                    raise ValueError(
-                        f"Unknown measurement mode: {config.measurement_mode}"
-                    )
-                stopped = self._stop_event.is_set() or runner.stop_requested()
-                result_dir = runner.cv.get_out_dir()
-
+            elif config.measurement_mode == "column":
+                runner.measure_col(
+                    config.targets,
+                    on_col_start=self._target_started,
+                    on_col_complete=self._target_completed,
+                )
+            else:
+                raise ValueError(
+                    f"Unknown measurement mode: {config.measurement_mode}"
+                )
+            stopped = self._stop_event.is_set() or runner.stop_requested()
+            result_dir = runner.cv.get_out_dir()
+            self._publish_measurement_status(
+                "stopped" if stopped else "completed",
+                self._current_target if self._current_target >= 0 else None,
+            )
+            runner.close()
+            runner = None
             self.completed.emit(stopped, result_dir or config.result_path)
         except BaseException as exc:
+            if runner is not None:
+                self._publish_measurement_status(
+                    "failed",
+                    self._current_target if self._current_target >= 0 else None,
+                )
             details = "".join(
                 traceback.format_exception(type(exc), exc, exc.__traceback__)
             )
             self.log_message.emit(details)
             self.failed.emit(str(exc) or type(exc).__name__)
         finally:
+            if runner is not None:
+                runner.close()
             self._runner = None

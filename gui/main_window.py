@@ -246,7 +246,7 @@ class MainWindow(QMainWindow):
     def _build_cv_control_row(self):
         row = QHBoxLayout()
         self.cv_start_button = QPushButton("Start measurement")
-        self.cv_stop_button = QPushButton("Stop measurement / Output Off")
+        self.cv_stop_button = QPushButton("Stop measurement")
         self.cv_stop_button.setStyleSheet("color: #b00020; font-weight: bold;")
         self.cv_channel_progress = QProgressBar()
         self.cv_point_progress = QProgressBar()
@@ -458,7 +458,7 @@ class MainWindow(QMainWindow):
     def _build_control_row(self):
         row = QHBoxLayout()
         self.start_button = QPushButton("Start measurement")
-        self.stop_button = QPushButton("Stop measurement / Output Off")
+        self.stop_button = QPushButton("Stop measurement")
         self.stop_button.setStyleSheet("color: #b00020; font-weight: bold;")
         self.channel_progress = QProgressBar()
         self.point_progress = QProgressBar()

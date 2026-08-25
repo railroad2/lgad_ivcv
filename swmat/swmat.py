@@ -98,3 +98,32 @@ class SWmat:
 
     def off_all(self):
         return self._execute("alloff")
+
+    def publish_measurement_status(
+        self,
+        *,
+        status,
+        kind,
+        mode,
+        target,
+        completed,
+        total,
+    ):
+        """Best-effort target progress publication for WebSocket monitors."""
+        comm = self._require_comm()
+        publisher = getattr(comm, "publish_measurement_status", None)
+        if publisher is None:
+            return None
+
+        try:
+            return publisher(
+                status=status,
+                kind=kind,
+                mode=mode,
+                target=target,
+                completed=completed,
+                total=total,
+            )
+        except Exception as exc:
+            print(f"WARNING: failed to publish measurement status: {exc}")
+            return None

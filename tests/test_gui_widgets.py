@@ -108,15 +108,30 @@ class FakeIVMeasurement:
         return "/tmp/result/measurement"
 
 
+class FakeStatusMatrix:
+    def __init__(self):
+        self.statuses = []
+
+    def publish_measurement_status(self, **status):
+        self.statuses.append(status)
+
+
 class FakeIVRunner:
+    last_instance = None
+
     def __init__(self, *_args):
+        type(self).last_instance = self
         self.iv = FakeIVMeasurement()
+        self.swm = FakeStatusMatrix()
 
     def __enter__(self):
         return self
 
     def __exit__(self, *_args):
         return False
+
+    def close(self):
+        pass
 
     def set_smu(self, _resource):
         pass
@@ -167,16 +182,23 @@ class FakeCVMeasurement(FakeIVMeasurement):
 
 
 class FakeCVRunner:
+    last_instance = None
+
     def __init__(self, *_args):
+        type(self).last_instance = self
         self.cv = FakeCVMeasurement()
         self.ac_level = None
         self.freq = None
+        self.swm = FakeStatusMatrix()
 
     def __enter__(self):
         return self
 
     def __exit__(self, *_args):
         return False
+
+    def close(self):
+        pass
 
     def set_basepath(self, _path):
         pass
@@ -259,6 +281,16 @@ class IVWorkerTests(unittest.TestCase):
                     [(False, "/tmp/result/measurement")],
                 )
                 self.assertEqual(result_paths, ["/tmp/result/measurement"])
+                statuses = FakeIVRunner.last_instance.swm.statuses
+                self.assertEqual(
+                    [status["status"] for status in statuses],
+                    ["starting", "running", "running", "completed"],
+                )
+                self.assertTrue(
+                    all(status["kind"] == "IV" for status in statuses)
+                )
+                self.assertTrue(all(status["mode"] == mode for status in statuses))
+                self.assertNotIn("voltage", statuses[-1])
 
 
 @unittest.skipIf(QApplication is None, "PySide6 is not installed")
@@ -302,6 +334,16 @@ class CVWorkerTests(unittest.TestCase):
                     completions,
                     [(False, "/tmp/result/measurement")],
                 )
+                statuses = FakeCVRunner.last_instance.swm.statuses
+                self.assertEqual(
+                    [status["status"] for status in statuses],
+                    ["starting", "running", "running", "completed"],
+                )
+                self.assertTrue(
+                    all(status["kind"] == "CV" for status in statuses)
+                )
+                self.assertTrue(all(status["mode"] == mode for status in statuses))
+                self.assertNotIn("voltage", statuses[-1])
 
 
 @unittest.skipIf(QApplication is None, "PySide6 is not installed")

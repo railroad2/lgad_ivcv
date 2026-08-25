@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PySide6.QtCore import QSettings
-    from PySide6.QtWidgets import QApplication, QDockWidget
+    from PySide6.QtWidgets import QApplication
 
     from lgad_ivcv.gui.channel_grid import ChannelGrid
     from lgad_ivcv.gui.iv_worker import IVRunConfig, IVWorker
@@ -169,7 +169,7 @@ class IVWorkerTests(unittest.TestCase):
 
 
 @unittest.skipIf(QApplication is None, "PySide6 is not installed")
-class MainWindowDockTests(unittest.TestCase):
+class MainWindowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
@@ -177,18 +177,18 @@ class MainWindowDockTests(unittest.TestCase):
         cls.app.setApplicationName("LGAD main window tests")
         QSettings().clear()
 
-    def test_channel_and_plot_float_while_log_stays_in_main_window(self):
+    def test_channel_and_plot_are_independent_windows(self):
         window = MainWindow()
 
-        self.assertIsInstance(window.channel_dock, QDockWidget)
-        self.assertIsInstance(window.live_iv_dock, QDockWidget)
-        self.assertTrue(
-            window.channel_dock.features() & QDockWidget.DockWidgetFloatable
-        )
-        self.assertTrue(
-            window.live_iv_dock.features() & QDockWidget.DockWidgetFloatable
-        )
+        self.assertTrue(window.channel_window.isWindow())
+        self.assertTrue(window.live_iv_window.isWindow())
+        self.assertIsNot(window.channel_grid.window(), window)
+        self.assertIsNot(window.plot_widget.window(), window)
         self.assertIs(window.log_edit.window(), window)
+        self.assertFalse(window.live_iv_window.isVisible())
+
+        window._show_live_iv_window()
+        self.assertTrue(window.live_iv_window.isVisible())
 
         window.close()
 

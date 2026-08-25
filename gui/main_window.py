@@ -6,11 +6,10 @@ from pathlib import Path
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import QSettings, QThread, Qt
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtGui import QCloseEvent, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDockWidget,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -57,6 +56,7 @@ class MainWindow(QMainWindow):
         self._plot_pau = []
         self._plot_smu = []
         self._log_file_path = None
+        self._channel_window_shown = False
 
         self._build_ui()
         self.measurement_mode_combo.currentIndexChanged.connect(
@@ -76,42 +76,39 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("Ready")
-        self.setDockNestingEnabled(True)
 
-        self.channel_dock = self._create_dock(
-            "Measurement channels",
-            "measurementChannelsDock",
-            self._build_channel_panel(),
-            Qt.LeftDockWidgetArea,
+        self.channel_window = self._create_auxiliary_window(
+            "Measurement channels", self._build_channel_panel(), 820, 720
         )
-        self.live_iv_dock = self._create_dock(
-            "Live IV",
-            "liveIvDock",
-            self._build_live_iv_panel(),
-            Qt.RightDockWidgetArea,
-        )
-        self.resizeDocks(
-            [self.channel_dock, self.live_iv_dock],
-            [760, 600],
-            Qt.Horizontal,
+        self.live_iv_window = self._create_auxiliary_window(
+            "Live IV", self._build_live_iv_panel(), 760, 600
         )
 
         view_menu = self.menuBar().addMenu("View")
-        view_menu.addAction(self.channel_dock.toggleViewAction())
-        view_menu.addAction(self.live_iv_dock.toggleViewAction())
+        view_menu.addAction("Measurement channels", self._show_channel_window)
+        view_menu.addAction("Live IV", self._show_live_iv_window)
 
-    def _create_dock(self, title, object_name, widget, area):
-        dock = QDockWidget(title, self)
-        dock.setObjectName(object_name)
-        dock.setAllowedAreas(Qt.AllDockWidgetAreas)
-        dock.setFeatures(
-            QDockWidget.DockWidgetClosable
-            | QDockWidget.DockWidgetMovable
-            | QDockWidget.DockWidgetFloatable
-        )
-        dock.setWidget(widget)
-        self.addDockWidget(area, dock)
-        return dock
+    def _create_auxiliary_window(self, title, content, width, height):
+        window = QWidget(self, Qt.Window)
+        window.setWindowTitle(title)
+        window.setAttribute(Qt.WA_QuitOnClose, False)
+        layout = QVBoxLayout(window)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(content)
+        window.resize(width, height)
+        return window
+
+    @staticmethod
+    def _show_window(window):
+        window.show()
+        window.raise_()
+        window.activateWindow()
+
+    def _show_channel_window(self):
+        self._show_window(self.channel_window)
+
+    def _show_live_iv_window(self):
+        self._show_window(self.live_iv_window)
 
     def _build_settings_row(self):
         row = QHBoxLayout()
@@ -150,6 +147,13 @@ class MainWindow(QMainWindow):
         self.compliance_edit = QLineEdit("1e-5")
         self.return_sweep_check = QCheckBox("Return sweep toward 0 V")
         measurement_form.addRow("Measurement mode", self.measurement_mode_combo)
+        self.open_channels_button = QPushButton("Select channels...")
+        self.open_channels_button.clicked.connect(self._show_channel_window)
+        self.selection_summary_label = QLabel()
+        channel_row = QHBoxLayout()
+        channel_row.addWidget(self.open_channels_button)
+        channel_row.addWidget(self.selection_summary_label, 1)
+        measurement_form.addRow("Measurement targets", channel_row)
         measurement_form.addRow("Sensor name", self.sensor_edit)
         measurement_form.addRow("Start voltage (V)", self.start_voltage_spin)
         measurement_form.addRow("End voltage (V)", self.end_voltage_spin)
@@ -265,13 +269,15 @@ class MainWindow(QMainWindow):
     def _channel_selection_changed(self, count):
         mode = self.measurement_mode_combo.currentData() or "channel"
         plural = self.MODE_LABELS[mode][1]
-        self.channel_count_label.setText(f"{count} {plural} selected")
+        selection_text = f"{count} {plural} selected"
+        self.channel_count_label.setText(selection_text)
+        self.selection_summary_label.setText(selection_text)
 
     def _measurement_mode_changed(self, _index=None):
         mode = self.measurement_mode_combo.currentData() or "channel"
         singular, plural = self.MODE_LABELS[mode]
         self.channel_grid.set_selection_mode(mode)
-        self.channel_dock.setWindowTitle(f"Measurement {plural}")
+        self.channel_window.setWindowTitle(f"Measurement {plural}")
         self.channel_progress.setFormat(f"{singular} %v/%m")
         self._channel_selection_changed(
             len(self.channel_grid.selected_targets())
@@ -374,6 +380,7 @@ class MainWindow(QMainWindow):
         self._thread = thread
         self._worker = worker
         self._set_running(True)
+        self._show_live_iv_window()
         plural = self.MODE_LABELS[config.measurement_mode][1]
         self._append_log(
             f"Measurement started: {len(config.targets)} {plural}"
@@ -564,9 +571,12 @@ class MainWindow(QMainWindow):
         geometry = self._settings.value("gui/geometry")
         if geometry is not None:
             self.restoreGeometry(geometry)
-        dock_state = self._settings.value("gui/dock_state")
-        if dock_state is not None:
-            self.restoreState(dock_state)
+        channel_geometry = self._settings.value("gui/channel_window_geometry")
+        if channel_geometry is not None:
+            self.channel_window.restoreGeometry(channel_geometry)
+        live_iv_geometry = self._settings.value("gui/live_iv_window_geometry")
+        if live_iv_geometry is not None:
+            self.live_iv_window.restoreGeometry(live_iv_geometry)
 
     def _save_settings(self):
         self._settings.setValue("iv/port", self.port_edit.text())
@@ -585,7 +595,18 @@ class MainWindow(QMainWindow):
             self.measurement_mode_combo.currentData(),
         )
         self._settings.setValue("gui/geometry", self.saveGeometry())
-        self._settings.setValue("gui/dock_state", self.saveState())
+        self._settings.setValue(
+            "gui/channel_window_geometry", self.channel_window.saveGeometry()
+        )
+        self._settings.setValue(
+            "gui/live_iv_window_geometry", self.live_iv_window.saveGeometry()
+        )
+
+    def showEvent(self, event: QShowEvent):
+        super().showEvent(event)
+        if not self._channel_window_shown:
+            self._channel_window_shown = True
+            self._show_channel_window()
 
     def closeEvent(self, event: QCloseEvent):
         if self._worker is not None:
@@ -598,4 +619,6 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self._save_settings()
+        self.channel_window.close()
+        self.live_iv_window.close()
         event.accept()

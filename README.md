@@ -29,9 +29,10 @@ channels in each selected row or column during one sweep. The initial result
 directory follows
 `IVCV_RESULT_PATH` when it is set, otherwise it is `./result`.
 
-The channel selector and live IV plot are dockable panels. Drag or double-click
-a panel title to move it into a separate window; use the `View` menu to reopen
-a closed panel. The status log remains fixed in the main window.
+The channel selector is an independent window that opens with the main window.
+The independent Live IV window opens automatically when a measurement starts.
+Use the `View` menu to reopen either window; the status log remains fixed in the
+main window.
 
 Each measurement session writes the timestamped status messages to
 `IV_GUI_YYYY-MM-DDTHHMMSS_vN.log` in the same dated session directory as the

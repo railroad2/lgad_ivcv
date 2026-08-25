@@ -2,6 +2,7 @@ import os
 import re
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -9,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PySide6.QtCore import QSettings, Qt
-    from PySide6.QtWidgets import QApplication, QFrame
+    from PySide6.QtWidgets import QApplication, QFrame, QLabel
 
     from lgad_ivcv.gui.channel_grid import ChannelGrid
     from lgad_ivcv.gui.cv_worker import CVRunConfig, CVWorker
@@ -332,6 +333,7 @@ class MainWindowTests(unittest.TestCase):
     def test_cv_tab_builds_valid_channel_measurement_config(self):
         window = MainWindow()
         window.measurement_tabs.setCurrentIndex(1)
+        window.cv_measurement_mode_combo.setCurrentIndex(0)
         window.channel_grid.clear_all()
         window.channel_grid._buttons[1][2].setChecked(True)
         window.cv_sensor_edit.setText("cv_sensor")
@@ -354,6 +356,7 @@ class MainWindowTests(unittest.TestCase):
         window.channel_grid.clear_all()
 
         window.cv_measurement_mode_combo.setCurrentIndex(1)
+        self.assertEqual(window.measurement_mode_combo.currentData(), "row")
         window.channel_grid.toggle_row(2)
         row_config = window._make_cv_config()
         self.assertEqual(row_config.measurement_mode, "row")
@@ -361,6 +364,7 @@ class MainWindowTests(unittest.TestCase):
 
         window.channel_grid.clear_all()
         window.cv_measurement_mode_combo.setCurrentIndex(2)
+        self.assertEqual(window.measurement_mode_combo.currentData(), "column")
         window.channel_grid.toggle_col(3)
         column_config = window._make_cv_config()
         self.assertEqual(column_config.measurement_mode, "column")
@@ -386,13 +390,71 @@ class MainWindowTests(unittest.TestCase):
 
         window.cv_result_path_edit.setText("/shared/result")
         self.assertEqual(window.result_path_edit.text(), "/shared/result")
+        window.sensor_edit.setText("shared_sensor,description")
+        self.assertEqual(
+            window.cv_sensor_edit.text(),
+            "shared_sensor,description",
+        )
+        date = datetime.now().strftime("%Y-%m-%d")
+        self.assertEqual(
+            window.output_path_label.text(),
+            f"/shared/result/{date}/shared_sensor",
+        )
+        self.assertEqual(
+            window.cv_output_path_label.text(),
+            f"/shared/result/{date}/shared_sensor",
+        )
+        self.assertEqual(
+            window.output_path_label.parentWidget().title(),
+            "Result path",
+        )
+        self.assertEqual(
+            window.cv_output_path_label.parentWidget().title(),
+            "Result path",
+        )
+        self.assertNotIn(
+            "Initial value source",
+            [label.text() for label in window.findChildren(QLabel)],
+        )
         window._save_settings()
         self.assertEqual(settings.value("result_path"), "/shared/result")
+        self.assertEqual(
+            settings.value("sensor_name"),
+            "shared_sensor,description",
+        )
         self.assertFalse(settings.contains("iv/result_path"))
         self.assertFalse(settings.contains("cv/result_path"))
+        self.assertFalse(settings.contains("iv/sensor"))
+        self.assertFalse(settings.contains("cv/sensor"))
 
         window.close()
         settings.clear()
+
+    def test_measurement_mode_channel_setup_and_sensor_are_shared(self):
+        window = MainWindow()
+        window.channel_grid.clear_all()
+
+        window.measurement_mode_combo.setCurrentIndex(1)
+        window.channel_grid.toggle_row(4)
+        window.cv_sensor_edit.setText("shared_sensor")
+
+        self.assertEqual(window.cv_measurement_mode_combo.currentData(), "row")
+        self.assertEqual(window.sensor_edit.text(), "shared_sensor")
+        self.assertEqual(window.channel_grid.selected_targets(), [4])
+        self.assertEqual(window.selection_summary_label.text(), "1 rows selected")
+        self.assertEqual(
+            window.cv_selection_summary_label.text(),
+            "1 rows selected",
+        )
+
+        iv_config = window._make_config()
+        window.measurement_tabs.setCurrentIndex(1)
+        cv_config = window._make_cv_config()
+        self.assertEqual(iv_config.measurement_mode, cv_config.measurement_mode)
+        self.assertEqual(iv_config.targets, cv_config.targets)
+        self.assertEqual(iv_config.sensor_name, cv_config.sensor_name)
+
+        window.close()
 
     def test_main_window_has_iv_and_cv_tabs_and_file_exit(self):
         window = MainWindow()

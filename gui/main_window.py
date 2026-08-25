@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QStatusBar,
     QTabWidget,
     QTextEdit,
@@ -72,10 +73,22 @@ class MainWindow(QMainWindow):
         self.cv_measurement_mode_combo.currentIndexChanged.connect(
             self._cv_measurement_mode_changed
         )
+        self.measurement_mode_combo.currentIndexChanged.connect(
+            self.cv_measurement_mode_combo.setCurrentIndex
+        )
+        self.cv_measurement_mode_combo.currentIndexChanged.connect(
+            self.measurement_mode_combo.setCurrentIndex
+        )
+        self.sensor_edit.textChanged.connect(self.cv_sensor_edit.setText)
+        self.cv_sensor_edit.textChanged.connect(self.sensor_edit.setText)
         self.result_path_edit.textChanged.connect(self.cv_result_path_edit.setText)
         self.cv_result_path_edit.textChanged.connect(self.result_path_edit.setText)
+        self.result_path_edit.textChanged.connect(self._update_output_paths)
+        self.sensor_edit.textChanged.connect(self._update_output_paths)
+        self.cv_sensor_edit.textChanged.connect(self._update_output_paths)
         self.measurement_tabs.currentChanged.connect(self._measurement_tab_changed)
         self._load_settings()
+        self._update_output_paths()
         self._measurement_tab_changed(self.measurement_tabs.currentIndex())
         self._set_running(False)
 
@@ -195,7 +208,7 @@ class MainWindow(QMainWindow):
         measurement_form.addRow("Frequency (Hz)", self.cv_frequency_spin)
         measurement_form.addRow("", self.cv_return_sweep_check)
 
-        output = QGroupBox("Result storage")
+        output = QGroupBox("Result path")
         output_form = QFormLayout(output)
         self.cv_result_path_edit = QLineEdit(resolve_result_path())
         self.cv_browse_button = QPushButton("Browse...")
@@ -203,10 +216,17 @@ class MainWindow(QMainWindow):
         result_row = QHBoxLayout()
         result_row.addWidget(self.cv_result_path_edit, 1)
         result_row.addWidget(self.cv_browse_button)
-        output_form.addRow("Result path", result_row)
-        env_path = os.environ.get("IVCV_RESULT_PATH")
-        source = "IVCV_RESULT_PATH" if env_path else "Default: ./result"
-        output_form.addRow("Initial value source", QLabel(source))
+        output_form.addRow("Base path", result_row)
+        self.cv_output_path_label = QLabel()
+        self.cv_output_path_label.setTextInteractionFlags(
+            Qt.TextSelectableByMouse
+        )
+        self.cv_output_path_label.setWordWrap(True)
+        self.cv_output_path_label.setSizePolicy(
+            QSizePolicy.Ignored,
+            QSizePolicy.Preferred,
+        )
+        output_form.addRow("Output path", self.cv_output_path_label)
 
         top_row.addWidget(connection, 1)
         top_row.addWidget(measurement, 1)
@@ -319,7 +339,7 @@ class MainWindow(QMainWindow):
         measurement_form.addRow("Current compliance (A)", self.compliance_edit)
         measurement_form.addRow("", self.return_sweep_check)
 
-        output = QGroupBox("Result storage")
+        output = QGroupBox("Result path")
         output_form = QFormLayout(output)
         self.result_path_edit = QLineEdit(resolve_result_path())
         self.browse_button = QPushButton("Browse...")
@@ -327,10 +347,15 @@ class MainWindow(QMainWindow):
         result_row = QHBoxLayout()
         result_row.addWidget(self.result_path_edit, 1)
         result_row.addWidget(self.browse_button)
-        output_form.addRow("Result path", result_row)
-        env_path = os.environ.get("IVCV_RESULT_PATH")
-        source = "IVCV_RESULT_PATH" if env_path else "Default: ./result"
-        output_form.addRow("Initial value source", QLabel(source))
+        output_form.addRow("Base path", result_row)
+        self.output_path_label = QLabel()
+        self.output_path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.output_path_label.setWordWrap(True)
+        self.output_path_label.setSizePolicy(
+            QSizePolicy.Ignored,
+            QSizePolicy.Preferred,
+        )
+        output_form.addRow("Output path", self.output_path_label)
 
         top_row.addWidget(connection, 1)
         top_row.addWidget(measurement, 1)
@@ -450,21 +475,13 @@ class MainWindow(QMainWindow):
         return row
 
     def _channel_selection_changed(self, _count=None):
-        if self.measurement_tabs.currentIndex() == 1:
-            mode = self.cv_measurement_mode_combo.currentData() or "channel"
-            plural = self.MODE_LABELS[mode][1]
-            count = len(self.channel_grid.selected_targets())
-            selection_text = f"{count} {plural} selected"
-            self.channel_count_label.setText(selection_text)
-            self.cv_selection_summary_label.setText(selection_text)
-            return
-
         mode = self.measurement_mode_combo.currentData() or "channel"
         plural = self.MODE_LABELS[mode][1]
         count = len(self.channel_grid.selected_targets())
         selection_text = f"{count} {plural} selected"
         self.channel_count_label.setText(selection_text)
         self.selection_summary_label.setText(selection_text)
+        self.cv_selection_summary_label.setText(selection_text)
 
     def _measurement_mode_changed(self, _index=None):
         if self.measurement_tabs.currentIndex() != 0:
@@ -493,6 +510,27 @@ class MainWindow(QMainWindow):
             self._cv_measurement_mode_changed()
         else:
             self._measurement_mode_changed()
+
+    @staticmethod
+    def _sensor_output_path(base_path, sensor_name):
+        sensor_directory = sensor_name.split(",", 1)[0]
+        return str(
+            Path(base_path).expanduser()
+            / datetime.now().strftime("%Y-%m-%d")
+            / sensor_directory
+        )
+
+    def _update_output_paths(self, _value=None):
+        base_path = self.result_path_edit.text().strip() or "."
+        self.output_path_label.setText(
+            self._sensor_output_path(base_path, self.sensor_edit.text().strip())
+        )
+        self.cv_output_path_label.setText(
+            self._sensor_output_path(
+                base_path,
+                self.cv_sensor_edit.text().strip(),
+            )
+        )
 
     def _browse_result_path(self):
         path = QFileDialog.getExistingDirectory(
@@ -616,6 +654,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Check measurement settings", str(exc))
             return
 
+        self._update_output_paths()
         self._save_settings()
         self._plot_voltage.clear()
         self._plot_pau.clear()
@@ -665,6 +704,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Check CV measurement settings", str(exc))
             return
 
+        self._update_output_paths()
         self._save_settings()
         self._cv_plot_voltage.clear()
         self._cv_plot_capacitance.clear()
@@ -1039,7 +1079,13 @@ class MainWindow(QMainWindow):
             )
         self.smu_edit.setText(self._settings.value("iv/smu", ""))
         self.pau_edit.setText(self._settings.value("iv/pau", ""))
-        self.sensor_edit.setText(self._settings.value("iv/sensor", "test"))
+        sensor_name = self._settings.value("sensor_name")
+        if sensor_name is None:
+            sensor_name = self._settings.value(
+                "iv/sensor",
+                self._settings.value("cv/sensor", "test"),
+            )
+        self.sensor_edit.setText(sensor_name)
         if "IVCV_RESULT_PATH" in os.environ:
             result_path = resolve_result_path()
         else:
@@ -1077,7 +1123,6 @@ class MainWindow(QMainWindow):
             )
         self.cv_lcr_edit.setText(self._settings.value("cv/lcr", ""))
         self.cv_pau_edit.setText(self._settings.value("cv/pau", ""))
-        self.cv_sensor_edit.setText(self._settings.value("cv/sensor", "test"))
         self.cv_start_voltage_spin.setValue(
             self._settings.value("cv/start_voltage", 0.0, type=float)
         )
@@ -1099,10 +1144,12 @@ class MainWindow(QMainWindow):
         self.cv_dry_run_check.setChecked(
             self._settings.value("cv/dry_run", False, type=bool)
         )
-        saved_cv_mode = self._settings.value("cv/measurement_mode", "channel")
-        cv_mode_index = self.cv_measurement_mode_combo.findData(saved_cv_mode)
-        self.cv_measurement_mode_combo.setCurrentIndex(max(cv_mode_index, 0))
-        saved_mode = self._settings.value("iv/measurement_mode", "channel")
+        saved_mode = self._settings.value("measurement_mode")
+        if saved_mode is None:
+            saved_mode = self._settings.value(
+                "iv/measurement_mode",
+                self._settings.value("cv/measurement_mode", "channel"),
+            )
         mode_index = self.measurement_mode_combo.findData(saved_mode)
         self.measurement_mode_combo.setCurrentIndex(max(mode_index, 0))
         geometry = self._settings.value("gui/main_window_geometry_v3")
@@ -1122,7 +1169,9 @@ class MainWindow(QMainWindow):
         self._settings.setValue("iv/port", self.port_edit.text())
         self._settings.setValue("iv/smu", self.smu_edit.text())
         self._settings.setValue("iv/pau", self.pau_edit.text())
-        self._settings.setValue("iv/sensor", self.sensor_edit.text())
+        self._settings.setValue("sensor_name", self.sensor_edit.text())
+        self._settings.remove("iv/sensor")
+        self._settings.remove("cv/sensor")
         self._settings.setValue("result_path", self.result_path_edit.text())
         self._settings.remove("iv/result_path")
         self._settings.remove("cv/result_path")
@@ -1133,13 +1182,14 @@ class MainWindow(QMainWindow):
         self._settings.setValue("iv/return_sweep", self.return_sweep_check.isChecked())
         self._settings.setValue("iv/dry_run", self.dry_run_check.isChecked())
         self._settings.setValue(
-            "iv/measurement_mode",
+            "measurement_mode",
             self.measurement_mode_combo.currentData(),
         )
+        self._settings.remove("iv/measurement_mode")
+        self._settings.remove("cv/measurement_mode")
         self._settings.setValue("cv/port", self.cv_port_edit.text())
         self._settings.setValue("cv/lcr", self.cv_lcr_edit.text())
         self._settings.setValue("cv/pau", self.cv_pau_edit.text())
-        self._settings.setValue("cv/sensor", self.cv_sensor_edit.text())
         self._settings.setValue(
             "cv/start_voltage", self.cv_start_voltage_spin.value()
         )
@@ -1151,10 +1201,6 @@ class MainWindow(QMainWindow):
             "cv/return_sweep", self.cv_return_sweep_check.isChecked()
         )
         self._settings.setValue("cv/dry_run", self.cv_dry_run_check.isChecked())
-        self._settings.setValue(
-            "cv/measurement_mode",
-            self.cv_measurement_mode_combo.currentData(),
-        )
         self._settings.setValue("gui/main_window_geometry_v3", self.saveGeometry())
         self._settings.setValue(
             "gui/channel_window_geometry_v3", self.channel_window.saveGeometry()

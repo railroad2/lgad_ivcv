@@ -33,6 +33,9 @@ frequency, plus an optional PAU for external bias. Without a PAU, the GUI
 rejects bias settings below the LCR meter's -40 V limit. Live capacitance and
 resistance plots open when a CV measurement starts.
 
+The IV and CV tabs share the measurement mode, channel selection, and sensor
+name. Changing any of these settings in one tab updates the other tab.
+
 The IV and CV tabs share one result directory setting. `IVCV_RESULT_PATH` takes
 priority when it is set; otherwise the GUI restores the shared saved value or
 uses `./result` initially.

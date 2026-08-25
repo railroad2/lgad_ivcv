@@ -8,6 +8,7 @@ from PySide6.QtCore import QSettings, QThread, Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -37,9 +38,15 @@ from .iv_worker import IVRunConfig, IVWorker
 
 
 class MainWindow(QMainWindow):
+    MODE_LABELS = {
+        "channel": ("Channel", "channels"),
+        "row": ("Row", "rows"),
+        "column": ("Column", "columns"),
+    }
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("LGAD IV channel measurement")
+        self.setWindowTitle("LGAD IV measurement")
         self.resize(1420, 900)
 
         self._settings = QSettings()
@@ -50,7 +57,11 @@ class MainWindow(QMainWindow):
         self._plot_smu = []
 
         self._build_ui()
+        self.measurement_mode_combo.currentIndexChanged.connect(
+            self._measurement_mode_changed
+        )
         self._load_settings()
+        self._measurement_mode_changed()
         self._set_running(False)
 
     def _build_ui(self):
@@ -88,6 +99,14 @@ class MainWindow(QMainWindow):
 
         measurement = QGroupBox("IV measurement settings")
         measurement_form = QFormLayout(measurement)
+        self.measurement_mode_combo = QComboBox()
+        self.measurement_mode_combo.addItem("Individual channels", "channel")
+        self.measurement_mode_combo.addItem("Row-wise", "row")
+        self.measurement_mode_combo.addItem("Column-wise", "column")
+        self.measurement_mode_combo.setToolTip(
+            "Row-wise and Column-wise modes connect all 16 channels in each "
+            "selected row or column during one sweep."
+        )
         self.sensor_edit = QLineEdit("test")
         self.start_voltage_spin = self._voltage_spin(0.0)
         self.end_voltage_spin = self._voltage_spin(-10.0)
@@ -98,6 +117,7 @@ class MainWindow(QMainWindow):
         self.step_spin.setValue(1.0)
         self.compliance_edit = QLineEdit("1e-5")
         self.return_sweep_check = QCheckBox("Return sweep toward 0 V")
+        measurement_form.addRow("Measurement mode", self.measurement_mode_combo)
         measurement_form.addRow("Sensor name", self.sensor_edit)
         measurement_form.addRow("Start voltage (V)", self.start_voltage_spin)
         measurement_form.addRow("End voltage (V)", self.end_voltage_spin)
@@ -133,8 +153,8 @@ class MainWindow(QMainWindow):
         return spin
 
     def _build_channel_panel(self):
-        group = QGroupBox("Measurement channels")
-        layout = QVBoxLayout(group)
+        self.channel_group = QGroupBox("Measurement channels")
+        layout = QVBoxLayout(self.channel_group)
 
         controls = QHBoxLayout()
         self.select_all_button = QPushButton("Select all")
@@ -154,7 +174,7 @@ class MainWindow(QMainWindow):
         scroll.setWidget(self.channel_grid)
         scroll.setWidgetResizable(True)
         layout.addWidget(scroll, 1)
-        return group
+        return self.channel_group
 
     def channel_grid_select_all(self):
         self.channel_grid.select_all()
@@ -214,7 +234,19 @@ class MainWindow(QMainWindow):
         return row
 
     def _channel_selection_changed(self, count):
-        self.channel_count_label.setText(f"{count} selected")
+        mode = self.measurement_mode_combo.currentData() or "channel"
+        plural = self.MODE_LABELS[mode][1]
+        self.channel_count_label.setText(f"{count} {plural} selected")
+
+    def _measurement_mode_changed(self, _index=None):
+        mode = self.measurement_mode_combo.currentData() or "channel"
+        singular, plural = self.MODE_LABELS[mode]
+        self.channel_grid.set_selection_mode(mode)
+        self.channel_group.setTitle(f"Measurement {plural}")
+        self.channel_progress.setFormat(f"{singular} %v/%m")
+        self._channel_selection_changed(
+            len(self.channel_grid.selected_targets())
+        )
 
     def _browse_result_path(self):
         path = QFileDialog.getExistingDirectory(
@@ -234,7 +266,8 @@ class MainWindow(QMainWindow):
         port = self.port_edit.text().strip()
         sensor_name = self.sensor_edit.text().strip()
         result_path = self.result_path_edit.text().strip()
-        channels = tuple(self.channel_grid.selected_channels())
+        measurement_mode = self.measurement_mode_combo.currentData()
+        targets = tuple(self.channel_grid.selected_targets())
 
         if not port:
             raise ValueError("Enter a switching matrix port.")
@@ -242,8 +275,9 @@ class MainWindow(QMainWindow):
             raise ValueError("Enter a sensor name.")
         if not result_path:
             raise ValueError("Enter a result path.")
-        if not channels:
-            raise ValueError("Select at least one measurement channel.")
+        if not targets:
+            plural = self.MODE_LABELS[measurement_mode][1]
+            raise ValueError(f"Select at least one measurement {plural[:-1]}.")
 
         try:
             compliance = float(self.compliance_edit.text())
@@ -269,7 +303,8 @@ class MainWindow(QMainWindow):
             current_compliance=compliance,
             return_sweep=self.return_sweep_check.isChecked(),
             dry_run=self.dry_run_check.isChecked(),
-            channels=channels,
+            measurement_mode=measurement_mode,
+            targets=targets,
         )
 
     def _start_measurement(self):
@@ -285,7 +320,7 @@ class MainWindow(QMainWindow):
         self._plot_smu.clear()
         self._refresh_plot()
         self.log_edit.clear()
-        self.channel_progress.setRange(0, len(config.channels))
+        self.channel_progress.setRange(0, len(config.targets))
         self.channel_progress.setValue(0)
         self.point_progress.setRange(0, 1)
         self.point_progress.setValue(0)
@@ -296,8 +331,8 @@ class MainWindow(QMainWindow):
         thread.started.connect(worker.run)
         worker.status_changed.connect(self.statusBar().showMessage)
         worker.log_message.connect(self._append_log)
-        worker.channel_started.connect(self._channel_started)
-        worker.channel_completed.connect(self._channel_completed)
+        worker.target_started.connect(self._target_started)
+        worker.target_completed.connect(self._target_completed)
         worker.point_measured.connect(self._point_measured)
         worker.completed.connect(self._measurement_completed)
         worker.failed.connect(self._measurement_failed)
@@ -309,7 +344,10 @@ class MainWindow(QMainWindow):
         self._thread = thread
         self._worker = worker
         self._set_running(True)
-        self._append_log(f"Measurement started: {len(config.channels)} channel(s)")
+        plural = self.MODE_LABELS[config.measurement_mode][1]
+        self._append_log(
+            f"Measurement started: {len(config.targets)} {plural}"
+        )
         thread.start()
 
     def _stop_measurement(self):
@@ -319,7 +357,7 @@ class MainWindow(QMainWindow):
         self._append_log("Safe stop requested by user.")
         self._worker.request_stop()
 
-    def _channel_started(self, channel, index, total):
+    def _target_started(self, mode, target, index, total):
         self._plot_voltage.clear()
         self._plot_pau.clear()
         self._plot_smu.clear()
@@ -328,23 +366,35 @@ class MainWindow(QMainWindow):
         self.point_progress.setValue(0)
         self.channel_progress.setRange(0, total)
         self.channel_progress.setValue(index)
+        singular = self.MODE_LABELS[mode][0]
         self._append_log(
-            f"Channel {channel} measurement started ({index + 1}/{total})."
+            f"{singular} {target} measurement started ({index + 1}/{total})."
         )
 
-    def _channel_completed(self, channel, index, total):
+    def _target_completed(self, mode, target, index, total):
         self.channel_progress.setValue(index + 1)
-        self._append_log(f"Channel {channel} measurement completed.")
+        singular = self.MODE_LABELS[mode][0]
+        self._append_log(f"{singular} {target} measurement completed.")
 
-    def _point_measured(self, channel, voltage, current_pau, current_smu, index, total):
+    def _point_measured(
+        self,
+        mode,
+        target,
+        voltage,
+        current_pau,
+        current_smu,
+        index,
+        total,
+    ):
         self._plot_voltage.append(voltage)
         self._plot_pau.append(current_pau)
         self._plot_smu.append(current_smu)
         self.point_progress.setRange(0, max(total, 1))
         self.point_progress.setValue(index)
         self._refresh_plot()
+        singular = self.MODE_LABELS[mode][0]
         self.statusBar().showMessage(
-            f"Channel {channel}: {voltage:.1f} V, PAU {current_pau:.4g} A, "
+            f"{singular} {target}: {voltage:.1f} V, PAU {current_pau:.4g} A, "
             f"SMU {current_smu:.4g} A"
         )
 
@@ -402,6 +452,7 @@ class MainWindow(QMainWindow):
             self.smu_edit,
             self.pau_edit,
             self.dry_run_check,
+            self.measurement_mode_combo,
             self.sensor_edit,
             self.start_voltage_spin,
             self.end_voltage_spin,
@@ -445,6 +496,9 @@ class MainWindow(QMainWindow):
         self.dry_run_check.setChecked(
             self._settings.value("iv/dry_run", False, type=bool)
         )
+        saved_mode = self._settings.value("iv/measurement_mode", "channel")
+        mode_index = self.measurement_mode_combo.findData(saved_mode)
+        self.measurement_mode_combo.setCurrentIndex(max(mode_index, 0))
 
     def _save_settings(self):
         self._settings.setValue("iv/port", self.port_edit.text())
@@ -458,6 +512,10 @@ class MainWindow(QMainWindow):
         self._settings.setValue("iv/current_compliance", self.compliance_edit.text())
         self._settings.setValue("iv/return_sweep", self.return_sweep_check.isChecked())
         self._settings.setValue("iv/dry_run", self.dry_run_check.isChecked())
+        self._settings.setValue(
+            "iv/measurement_mode",
+            self.measurement_mode_combo.currentData(),
+        )
 
     def closeEvent(self, event: QCloseEvent):
         if self._worker is not None:

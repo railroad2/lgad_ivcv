@@ -208,11 +208,19 @@ class IV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to turn off all switches: {exc}")
 
-    def measure_rows(self, rows=None, verbose=1):
+    def measure_rows(
+        self,
+        rows=None,
+        verbose=1,
+        on_row_start=None,
+        on_row_complete=None,
+    ):
         self.iv.set_measurement_time()
 
         if rows is None or len(rows) == 0:
             rows = list(range(16))
+        else:
+            rows = list(rows)
 
         swm = self.swm
 
@@ -220,13 +228,22 @@ class IV_sw:
         swm.off_all()
 
         try:
-            for row in rows:
+            for index, row in enumerate(rows):
+                if self.stop_requested():
+                    break
+
                 if not (0 <= row < 16):
                     raise ValueError(f"Row out of range: {row}")
 
                 if verbose:
                     print("-"*60)
                     print(f"Switch row: {row}")
+
+                if on_row_start is not None:
+                    on_row_start(row, index, len(rows))
+
+                if self.stop_requested():
+                    break
 
                 swm.on_row(row)
                 try:
@@ -244,17 +261,31 @@ class IV_sw:
                 finally:
                     swm.off_row(row)
 
+                if on_row_complete is not None:
+                    on_row_complete(row, index, len(rows))
+
+                if self.stop_requested():
+                    break
+
         finally:
             try:
                 swm.off_all()
             except Exception as exc:
                 print(f"WARNING: failed to turn off all switches: {exc}")
 
-    def measure_col(self, cols=None, verbose=1):
+    def measure_col(
+        self,
+        cols=None,
+        verbose=1,
+        on_col_start=None,
+        on_col_complete=None,
+    ):
         self.iv.set_measurement_time()
 
         if cols is None or len(cols) == 0:
             cols = list(range(16))
+        else:
+            cols = list(cols)
 
         swm = self.swm
 
@@ -262,13 +293,22 @@ class IV_sw:
         swm.off_all()
 
         try:
-            for col in cols:
+            for index, col in enumerate(cols):
+                if self.stop_requested():
+                    break
+
                 if not (0 <= col < 16):
                     raise ValueError(f"Column out of range: {col}")
 
                 if verbose:
                     print("-"*60)
                     print(f"Switch col: {col}")
+
+                if on_col_start is not None:
+                    on_col_start(col, index, len(cols))
+
+                if self.stop_requested():
+                    break
 
                 swm.on_col(col)
                 try:
@@ -285,6 +325,12 @@ class IV_sw:
                         print(f'   Elapsed time for col sweep = {t1 - t0} s')
                 finally:
                     swm.off_col(col)
+
+                if on_col_complete is not None:
+                    on_col_complete(col, index, len(cols))
+
+                if self.stop_requested():
+                    break
 
         finally:
             try:

@@ -21,7 +21,8 @@ class IVRunConfig:
     current_compliance: float
     return_sweep: bool
     dry_run: bool
-    channels: tuple
+    measurement_mode: str
+    targets: tuple
 
 
 class IVWorker(QObject):
@@ -29,9 +30,9 @@ class IVWorker(QObject):
 
     status_changed = Signal(str)
     log_message = Signal(str)
-    channel_started = Signal(int, int, int)
-    channel_completed = Signal(int, int, int)
-    point_measured = Signal(int, float, float, float, int, int)
+    target_started = Signal(str, int, int, int)
+    target_completed = Signal(str, int, int, int)
+    point_measured = Signal(str, int, float, float, float, int, int)
     completed = Signal(bool, str)
     failed = Signal(str)
 
@@ -40,7 +41,7 @@ class IVWorker(QObject):
         self.config = config
         self._stop_event = threading.Event()
         self._runner = None
-        self._current_channel = -1
+        self._current_target = -1
 
     def request_stop(self):
         """Set stop flags only; hardware cleanup remains in the worker threads."""
@@ -50,21 +51,34 @@ class IVWorker(QObject):
             runner.request_stop()
         self.status_changed.emit("Stopping the measurement safely...")
 
-    def _channel_started(self, channel, index, total):
-        self._current_channel = channel
-        self.channel_started.emit(channel, index, total)
+    @staticmethod
+    def _target_name(mode, target):
+        names = {"channel": "channel", "row": "row", "column": "column"}
+        return f"{names[mode]} {target}"
+
+    def _target_started(self, target, index, total):
+        mode = self.config.measurement_mode
+        self._current_target = target
+        self.target_started.emit(mode, target, index, total)
         self.status_changed.emit(
-            f"Measuring channel {channel} ({index + 1}/{total})"
+            f"Measuring {self._target_name(mode, target)} "
+            f"({index + 1}/{total})"
         )
 
-    def _channel_completed(self, channel, index, total):
-        self.channel_completed.emit(channel, index, total)
+    def _target_completed(self, target, index, total):
+        self.target_completed.emit(
+            self.config.measurement_mode,
+            target,
+            index,
+            total,
+        )
 
     def _point_measured(self, point):
         voltage, current_pau, current_smu = point
         measurement = self._runner.iv
         self.point_measured.emit(
-            self._current_channel,
+            self.config.measurement_mode,
+            self._current_target,
             float(voltage),
             float(current_pau),
             float(current_smu),
@@ -100,11 +114,28 @@ class IVWorker(QObject):
                 if self._stop_event.is_set():
                     runner.request_stop()
 
-                runner.measure_channel(
-                    config.channels,
-                    on_channel_start=self._channel_started,
-                    on_channel_complete=self._channel_completed,
-                )
+                if config.measurement_mode == "channel":
+                    runner.measure_channel(
+                        config.targets,
+                        on_channel_start=self._target_started,
+                        on_channel_complete=self._target_completed,
+                    )
+                elif config.measurement_mode == "row":
+                    runner.measure_rows(
+                        config.targets,
+                        on_row_start=self._target_started,
+                        on_row_complete=self._target_completed,
+                    )
+                elif config.measurement_mode == "column":
+                    runner.measure_col(
+                        config.targets,
+                        on_col_start=self._target_started,
+                        on_col_complete=self._target_completed,
+                    )
+                else:
+                    raise ValueError(
+                        f"Unknown measurement mode: {config.measurement_mode}"
+                    )
                 stopped = self._stop_event.is_set() or runner.stop_requested()
                 result_dir = runner.iv.get_out_dir()
 

@@ -13,6 +13,9 @@ class ChannelGrid(QWidget):
             "QToolButton:checked { background-color: #2878b5; color: white; }"
         )
         self._buttons = []
+        self._row_headers = []
+        self._col_headers = []
+        self._selection_mode = "channel"
 
         layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -29,12 +32,14 @@ class ChannelGrid(QWidget):
             button.setFixedSize(38, 28)
             button.clicked.connect(lambda _checked=False, c=col: self.toggle_col(c))
             layout.addWidget(button, 0, col + 1)
+            self._col_headers.append(button)
 
         for row in range(16):
             header = QPushButton(f"R{row}")
             header.setFixedSize(42, 28)
             header.clicked.connect(lambda _checked=False, r=row: self.toggle_row(r))
             layout.addWidget(header, row + 1, 0)
+            self._row_headers.append(header)
 
             row_buttons = []
             for col in range(16):
@@ -44,14 +49,50 @@ class ChannelGrid(QWidget):
                 button.setCheckable(True)
                 button.setChecked(True)
                 button.setFixedSize(38, 28)
-                button.toggled.connect(self._selection_changed)
+                button.toggled.connect(
+                    lambda checked, r=row, c=col: self._button_toggled(
+                        r, c, checked
+                    )
+                )
                 button.setToolTip(f"row {row}, column {col}, channel {channel}")
                 layout.addWidget(button, row + 1, col + 1)
                 row_buttons.append(button)
             self._buttons.append(row_buttons)
 
     def _selection_changed(self, _checked=False):
-        self.selection_changed.emit(len(self.selected_channels()))
+        self.selection_changed.emit(len(self.selected_targets()))
+
+    def _button_toggled(self, row, col, checked):
+        if self._selection_mode == "row":
+            self._set_buttons(self._buttons[row], checked)
+        elif self._selection_mode == "column":
+            self._set_buttons([buttons[col] for buttons in self._buttons], checked)
+        else:
+            self._selection_changed()
+
+    def set_selection_mode(self, mode):
+        if mode not in ("channel", "row", "column"):
+            raise ValueError(f"Unknown channel selection mode: {mode}")
+
+        self._selection_mode = mode
+        for header in self._row_headers:
+            header.setEnabled(mode != "column")
+        for header in self._col_headers:
+            header.setEnabled(mode != "row")
+
+        if mode == "row":
+            selected_rows = set(self.selected_rows())
+            for row, buttons in enumerate(self._buttons):
+                self._set_buttons(buttons, row in selected_rows, emit=False)
+        elif mode == "column":
+            selected_cols = set(self.selected_columns())
+            for col in range(16):
+                self._set_buttons(
+                    [buttons[col] for buttons in self._buttons],
+                    col in selected_cols,
+                    emit=False,
+                )
+        self._selection_changed()
 
     def selected_channels(self):
         return [
@@ -61,12 +102,34 @@ class ChannelGrid(QWidget):
             if button.isChecked()
         ]
 
-    def _set_buttons(self, buttons, checked):
+    def selected_rows(self):
+        return [
+            row
+            for row, buttons in enumerate(self._buttons)
+            if any(button.isChecked() for button in buttons)
+        ]
+
+    def selected_columns(self):
+        return [
+            col
+            for col in range(16)
+            if any(self._buttons[row][col].isChecked() for row in range(16))
+        ]
+
+    def selected_targets(self):
+        if self._selection_mode == "row":
+            return self.selected_rows()
+        if self._selection_mode == "column":
+            return self.selected_columns()
+        return self.selected_channels()
+
+    def _set_buttons(self, buttons, checked, emit=True):
         for button in buttons:
             button.blockSignals(True)
             button.setChecked(checked)
             button.blockSignals(False)
-        self._selection_changed()
+        if emit:
+            self._selection_changed()
 
     def select_all(self):
         self._set_buttons(

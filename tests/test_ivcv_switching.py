@@ -22,6 +22,12 @@ class FakeSwitchMatrix:
     def off_row(self, row):
         self.calls.append(("off_row", row))
 
+    def on_col(self, col):
+        self.calls.append(("on_col", col))
+
+    def off_col(self, col):
+        self.calls.append(("off_col", col))
+
     def off_all(self):
         self.calls.append(("off_all",))
 
@@ -100,6 +106,34 @@ class SwitchingMeasurementTests(unittest.TestCase):
         self.assertEqual(
             runner.swm.calls,
             [("off_all",), ("on_row", 2), ("off_row", 2), ("off_all",)],
+        )
+
+    def test_iv_row_and_column_callbacks_report_group_progress(self):
+        runner = IV_sw.__new__(IV_sw)
+        runner.iv = FakeMeasurement()
+        runner.swm = FakeSwitchMatrix()
+        runner.dryrun = True
+        starts = []
+        completions = []
+
+        with patch("builtins.print"):
+            runner.measure_rows(
+                [2],
+                verbose=0,
+                on_row_start=lambda *args: starts.append(("row", *args)),
+                on_row_complete=lambda *args: completions.append(("row", *args)),
+            )
+            runner.measure_col(
+                [3],
+                verbose=0,
+                on_col_start=lambda *args: starts.append(("column", *args)),
+                on_col_complete=lambda *args: completions.append(("column", *args)),
+            )
+
+        self.assertEqual(starts, [("row", 2, 0, 1), ("column", 3, 0, 1)])
+        self.assertEqual(
+            completions,
+            [("row", 2, 0, 1), ("column", 3, 0, 1)],
         )
 
     def test_ivcv_close_turns_everything_off_before_disconnect(self):

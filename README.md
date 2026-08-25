@@ -16,9 +16,11 @@ From the directory containing this repository, start the GUI with:
 python3 -m lgad_ivcv.gui
 ```
 
-The GUI provides the options of `scripts/iv_all.py`, a 16 by 16 linear-channel
-selector, live PAU/SMU plots, per-channel and sweep progress, and safe
-measurement cancellation. The initial result directory follows
+The GUI provides individual-channel, row-wise, and column-wise IV measurement,
+a 16 by 16 selector, live PAU/SMU plots, per-target and sweep progress, and
+safe measurement cancellation. Row-wise and column-wise modes connect all 16
+channels in each selected row or column during one sweep. The initial result
+directory follows
 `IVCV_RESULT_PATH` when it is set, otherwise it is `./result`.
 
 The switching matrix URI follows `IVCV_SWITCHING_MATRIX_URI` when it is set,

@@ -1,7 +1,15 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from scripts import cv_all, cv_selected, iv_all, iv_col, iv_row, iv_selected
+from scripts import (
+    cv_all,
+    cv_selected,
+    iv_all,
+    iv_col,
+    iv_once,
+    iv_row,
+    iv_selected,
+)
 
 
 class ScriptLifecycleTests(unittest.TestCase):
@@ -111,6 +119,30 @@ class ScriptLifecycleTests(unittest.TestCase):
         self.assertEqual(cv_selected.channel_number("0"), 0)
         with self.assertRaisesRegex(Exception, "between 0 and 255"):
             cv_selected.channel_number("-1")
+
+    def test_iv_once_runs_without_switching_matrix_selection(self):
+        runner = self._runner()
+        with patch.object(iv_once, "IV_sw", return_value=runner) as factory:
+            iv_once.measure_once(
+                0, -20, 2, 1e-6,
+                "/tmp/result", "sensor",
+                rsmu="SMU", rpau="PAU", return_swp=True,
+            )
+
+        factory.assert_called_once_with(port=None, dryrun=False)
+        runner.set_smu.assert_called_once_with("SMU")
+        runner.set_pau.assert_called_once_with("PAU")
+        runner.set_basepath.assert_called_once_with("/tmp/result")
+        runner.set_sensor_name.assert_called_once_with("sensor")
+        runner.set_sweep.assert_called_once_with(0, -20, 2, True)
+        runner.set_compliance.assert_called_once_with(1e-6)
+        runner.measure_Vsweep.assert_called_once_with(
+            0,
+            0,
+            target_label="single",
+        )
+        runner.swm.assert_not_called()
+        runner.__exit__.assert_called_once()
 
 
 if __name__ == "__main__":

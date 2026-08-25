@@ -6,10 +6,12 @@ class ChannelGrid(QWidget):
     """A 16 by 16 selector that exposes linear switch channel numbers."""
 
     selection_changed = Signal(int)
+    CELL_SIZE = 26
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setStyleSheet(
+            "QToolButton, QPushButton { padding: 0; font-size: 9px; }"
             "QToolButton:checked { background-color: #2878b5; color: white; }"
         )
         self._buttons = []
@@ -19,24 +21,25 @@ class ChannelGrid(QWidget):
 
         layout = QGridLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setHorizontalSpacing(2)
-        layout.setVerticalSpacing(2)
+        layout.setHorizontalSpacing(1)
+        layout.setVerticalSpacing(1)
 
         corner = QPushButton("R/C")
         corner.setEnabled(False)
-        corner.setFixedSize(42, 28)
+        corner.setFixedSize(self.CELL_SIZE, self.CELL_SIZE)
         layout.addWidget(corner, 0, 0)
 
         for col in range(16):
-            button = QPushButton(f"C{col}")
-            button.setFixedSize(38, 28)
+            button = QPushButton(f"{col:02d}")
+            button.setFixedSize(self.CELL_SIZE, self.CELL_SIZE)
             button.clicked.connect(lambda _checked=False, c=col: self.toggle_col(c))
             layout.addWidget(button, 0, col + 1)
             self._col_headers.append(button)
 
         for row in range(16):
-            header = QPushButton(f"R{row}")
-            header.setFixedSize(42, 28)
+            row_label = chr(ord("A") + row)
+            header = QPushButton(row_label)
+            header.setFixedSize(self.CELL_SIZE, self.CELL_SIZE)
             header.clicked.connect(lambda _checked=False, r=row: self.toggle_row(r))
             layout.addWidget(header, row + 1, 0)
             self._row_headers.append(header)
@@ -48,13 +51,15 @@ class ChannelGrid(QWidget):
                 button.setText(str(channel))
                 button.setCheckable(True)
                 button.setChecked(True)
-                button.setFixedSize(38, 28)
+                button.setFixedSize(self.CELL_SIZE, self.CELL_SIZE)
                 button.toggled.connect(
                     lambda checked, r=row, c=col: self._button_toggled(
                         r, c, checked
                     )
                 )
-                button.setToolTip(f"row {row}, column {col}, channel {channel}")
+                button.setToolTip(
+                    f"row {row_label}, column {col:02d}, channel {channel}"
+                )
                 layout.addWidget(button, row + 1, col + 1)
                 row_buttons.append(button)
             self._buttons.append(row_buttons)

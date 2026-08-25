@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("LGAD IV measurement")
-        self.resize(1100, 700)
+        self.resize(770, 700)
 
         self._settings = QSettings()
         self._thread = None
@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready")
 
         self.channel_window = self._create_auxiliary_window(
-            "Measurement channels", self._build_channel_panel(), 820, 720
+            "Measurement channels", self._build_channel_panel(), 575, 505
         )
         self.live_iv_window = self._create_auxiliary_window(
             "Live IV", self._build_live_iv_panel(), 760, 600
@@ -570,10 +570,10 @@ class MainWindow(QMainWindow):
         saved_mode = self._settings.value("iv/measurement_mode", "channel")
         mode_index = self.measurement_mode_combo.findData(saved_mode)
         self.measurement_mode_combo.setCurrentIndex(max(mode_index, 0))
-        geometry = self._settings.value("gui/main_window_geometry_v2")
+        geometry = self._settings.value("gui/main_window_geometry_v3")
         if geometry is not None:
             self.restoreGeometry(geometry)
-        channel_geometry = self._settings.value("gui/channel_window_geometry")
+        channel_geometry = self._settings.value("gui/channel_window_geometry_v2")
         if channel_geometry is not None:
             self.channel_window.restoreGeometry(channel_geometry)
         live_iv_geometry = self._settings.value("gui/live_iv_window_geometry")
@@ -596,9 +596,9 @@ class MainWindow(QMainWindow):
             "iv/measurement_mode",
             self.measurement_mode_combo.currentData(),
         )
-        self._settings.setValue("gui/main_window_geometry_v2", self.saveGeometry())
+        self._settings.setValue("gui/main_window_geometry_v3", self.saveGeometry())
         self._settings.setValue(
-            "gui/channel_window_geometry", self.channel_window.saveGeometry()
+            "gui/channel_window_geometry_v2", self.channel_window.saveGeometry()
         )
         self._settings.setValue(
             "gui/live_iv_window_geometry", self.live_iv_window.saveGeometry()

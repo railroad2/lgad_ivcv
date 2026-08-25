@@ -44,6 +44,25 @@ class ChannelGridTests(unittest.TestCase):
         grid.toggle_col(3)
         self.assertEqual(grid.selected_channels(), list(range(3, 256, 16)))
 
+    def test_headers_and_channel_buttons_use_compact_square_cells(self):
+        grid = ChannelGrid()
+
+        self.assertEqual(
+            [header.text() for header in grid._row_headers],
+            list("ABCDEFGHIJKLMNOP"),
+        )
+        self.assertEqual(
+            [header.text() for header in grid._col_headers],
+            [f"{column:02d}" for column in range(16)],
+        )
+        for button in (
+            grid._row_headers
+            + grid._col_headers
+            + [item for row in grid._buttons for item in row]
+        ):
+            self.assertEqual(button.width(), button.height())
+            self.assertEqual(button.width(), ChannelGrid.CELL_SIZE)
+
     def test_selection_mode_expands_cell_to_whole_row_or_column(self):
         grid = ChannelGrid()
         grid.clear_all()

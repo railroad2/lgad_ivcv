@@ -30,6 +30,22 @@ class IV_sw:
         self.port = port
         self.swm.open(port)
 
+    def close(self):
+        if self.swm.comm is None:
+            return
+        try:
+            self.swm.off_all()
+        except Exception as exc:
+            print(f"WARNING: failed to turn off all switches: {exc}")
+        finally:
+            self.swm.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
+
     def set_smu(self, smu_rsrc=None):
         if self.dryrun:
             return 

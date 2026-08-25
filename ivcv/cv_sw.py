@@ -11,7 +11,7 @@ from ..util.util import rowcol2nch
 class CV_sw:
 
     def __init__(self, port=None, dryrun=False):
-        self.port = port or 'ws://localhost:3001'
+        self.port = port or 'ws://localhost:8765'
         self.swm = SWmat(port)
         self.cv = CVMeasurement()
         self.lcr = WayneKerr4300()
@@ -30,6 +30,22 @@ class CV_sw:
     def set_switching_matrix(self, port):
         self.port = port
         self.swm.open(port)
+
+    def close(self):
+        if self.swm.comm is None:
+            return
+        try:
+            self.swm.off_all()
+        except Exception as exc:
+            print(f"WARNING: failed to turn off all switches: {exc}")
+        finally:
+            self.swm.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        self.close()
 
     def set_lcr(self, lcr_rsrc=None):
         if self.dryrun:

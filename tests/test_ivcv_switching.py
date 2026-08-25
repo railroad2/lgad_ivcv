@@ -8,6 +8,7 @@ from lgad_ivcv.ivcv.iv_sw import IV_sw
 class FakeSwitchMatrix:
     def __init__(self):
         self.calls = []
+        self.comm = object()
 
     def on(self, pins):
         self.calls.append(("on", pins))
@@ -27,6 +28,9 @@ class FakeSwitchMatrix:
     def pinstat_all(self):
         self.calls.append(("pinstat_all",))
         return [[0] * 16 for _ in range(16)]
+
+    def close(self):
+        self.calls.append(("close",))
 
 
 class FakeMeasurement:
@@ -97,6 +101,16 @@ class SwitchingMeasurementTests(unittest.TestCase):
             runner.swm.calls,
             [("off_all",), ("on_row", 2), ("off_row", 2), ("off_all",)],
         )
+
+    def test_ivcv_close_turns_everything_off_before_disconnect(self):
+        for runner_type in (IV_sw, CV_sw):
+            runner = runner_type.__new__(runner_type)
+            runner.swm = FakeSwitchMatrix()
+
+            with patch("builtins.print"):
+                runner.close()
+
+            self.assertEqual(runner.swm.calls, [("off_all",), ("close",)])
 
 
 if __name__ == "__main__":

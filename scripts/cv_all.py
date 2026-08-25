@@ -1,16 +1,6 @@
-import os
-import sys
-import time
-import datetime
 import argparse
-import ast
-import numpy as np
 
-from ast import literal_eval
-from collections.abc import Iterable
-
-import lgad_ivcv
-from lgad_ivcv.ivcv import cv_sw
+from lgad_ivcv.ivcv.cv_sw import CV_sw
 
 def measure_all(smport, v0, v1, dv,
                 basepath, sensor_name,
@@ -19,65 +9,43 @@ def measure_all(smport, v0, v1, dv,
     if channels is None:
         channels = []
 
-    cvsw = cv_sw.CV_sw(smport, dryrun)
+    with CV_sw(smport, dryrun) as cvsw:
+        cvsw.set_lcr(rlcr)
+        cvsw.set_pau(rpau)
+        cvsw.ac_level = 0.1
+        cvsw.set_basepath(basepath)
+        cvsw.set_sensor_name(sensor_name)
+        cvsw.set_sweep(v0, v1, dv, return_swp)
 
-    cvsw.set_lcr(rlcr)
-    cvsw.set_pau(rpau)
-    cvsw.ac_level = 0.1
-    cvsw.set_basepath(basepath)
-    cvsw.set_sensor_name(sensor_name)
-    cvsw.set_sweep(v0, v1, dv, return_swp)
-
-    if len(channels) == 0:
-        cvsw.measure_all_channels()
-    else:
-        if isinstance(channels[0], Iterable):
-            cvsw.measure_coord(channels)
-        else:
+        if channels:
             cvsw.measure_channel(channels)
+        else:
+            cvsw.measure_all_channels()
 
 
 def main():
-    parser = argparse.ArgumentParser(description="")
-    parser.add_argument('items',        nargs="*",      default=[],     help="Channel numbers") 
-    parser.add_argument('--Vstart',     required=False, default=0,      help="Start voltage")
-    parser.add_argument('--Vend',       required=False, default=-10,    help="End voltage")
-    parser.add_argument('--Vstep',      required=False, default=1,      help="Voltage step")
-    parser.add_argument('--sensorname', required=False, default='test', help="Sensor name")
-    parser.add_argument('--basepath',   required=False, default=None,   help="Base path for result output")
-    parser.add_argument('--return_swp', required=False, action="store_true", help="Return sweep")
-    parser.add_argument('--dryrun',     required=False, action="store_true", help="Dry run with only switching matrix operation")
-    parser.add_argument('--lcr',        required=False, default=None,   help="LCR meter resource")
-    parser.add_argument('--pau',        required=False, default=None,   help="PAU resource")
-
-    parser.add_argument('-p', '--port', required=False, default='ws://210.119.41.69:8765', help="Switching matrix port")
+    parser = argparse.ArgumentParser(description="Measure CV by switch channel")
+    parser.add_argument('items', nargs="*", type=int, help="Linear channel numbers (0..255)")
+    parser.add_argument('--Vstart', type=float, default=0, help="Start voltage")
+    parser.add_argument('--Vend', type=float, default=-10, help="End voltage")
+    parser.add_argument('--Vstep', type=float, default=1, help="Voltage step")
+    parser.add_argument('--sensorname', default='test', help="Sensor name")
+    parser.add_argument('--basepath', default='../../result/', help="Base path for result output")
+    parser.add_argument('--return_swp', action="store_true", help="Return sweep")
+    parser.add_argument('--dryrun', action="store_true", help="Dry run with only switching matrix operation")
+    parser.add_argument('--lcr', default=None, help="LCR meter resource")
+    parser.add_argument('--pau', default=None, help="PAU resource")
+    parser.add_argument('-p', '--port', default='ws://210.119.41.69:8765', help="Switching matrix port")
 
     args = parser.parse_args()
 
-    channels = [literal_eval(i) for i in args.items]
-    port = args.port
-
-    v0 = float(args.Vstart)
-    v1 = float(args.Vend)
-    dv = float(args.Vstep)
-
-    sensor_name = args.sensorname
-    return_swp = args.return_swp
-    dryrun = args.dryrun
-    rlcr = args.lcr
-    rpau = args.pau
-
-    if args.basepath == None:
-        basepath = f"../../result/"
-    else:
-        basepath = args.basepath
-
-    measure_all(port, v0, v1, dv, 
-                basepath, sensor_name, 
-                rlcr, rpau, 
-                channels, return_swp, dryrun)
+    measure_all(
+        args.port, args.Vstart, args.Vend, args.Vstep,
+        args.basepath, args.sensorname,
+        args.lcr, args.pau,
+        args.items, args.return_swp, args.dryrun,
+    )
 
 
 if __name__=="__main__":
     main()
-

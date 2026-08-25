@@ -1,0 +1,103 @@
+import unittest
+from unittest.mock import Mock, patch
+
+from lgad_ivcv.ivcv.cv_sw import CV_sw
+from lgad_ivcv.ivcv.iv_sw import IV_sw
+
+
+class FakeSwitchMatrix:
+    def __init__(self):
+        self.calls = []
+
+    def on(self, pins):
+        self.calls.append(("on", pins))
+
+    def off(self, pins):
+        self.calls.append(("off", pins))
+
+    def on_row(self, row):
+        self.calls.append(("on_row", row))
+
+    def off_row(self, row):
+        self.calls.append(("off_row", row))
+
+    def off_all(self):
+        self.calls.append(("off_all",))
+
+    def pinstat_all(self):
+        self.calls.append(("pinstat_all",))
+        return [[0] * 16 for _ in range(16)]
+
+
+class FakeMeasurement:
+    def __init__(self):
+        self.time_set = False
+
+    def set_measurement_time(self):
+        self.time_set = True
+
+
+class SwitchingMeasurementTests(unittest.TestCase):
+    def test_iv_channel_uses_linear_pin_and_cleans_up_on_failure(self):
+        runner = IV_sw.__new__(IV_sw)
+        runner.iv = FakeMeasurement()
+        runner.swm = FakeSwitchMatrix()
+        runner.dryrun = False
+        runner.measure_Vsweep = Mock(side_effect=RuntimeError("IV failed"))
+
+        with patch("builtins.print"):
+            with self.assertRaisesRegex(RuntimeError, "IV failed"):
+                runner.measure_channel([18], verbose=0)
+
+        runner.measure_Vsweep.assert_called_once_with(1, 2)
+        self.assertEqual(
+            runner.swm.calls,
+            [("off_all",), ("on", 18), ("off", 18), ("off_all",)],
+        )
+        self.assertTrue(runner.iv.time_set)
+
+    def test_cv_channel_uses_linear_pin_and_cleans_up_on_failure(self):
+        runner = CV_sw.__new__(CV_sw)
+        runner.swm = FakeSwitchMatrix()
+        runner.measure = Mock(side_effect=RuntimeError("CV failed"))
+
+        with patch("builtins.print"):
+            with self.assertRaisesRegex(RuntimeError, "CV failed"):
+                runner.measure_channel([35], verbose=0)
+
+        runner.measure.assert_called_once_with(2, 3)
+        self.assertEqual(
+            runner.swm.calls,
+            [("off_all",), ("on", 35), ("off", 35), ("off_all",)],
+        )
+
+    def test_coordinate_input_is_only_a_compatibility_conversion(self):
+        iv_runner = IV_sw.__new__(IV_sw)
+        iv_runner.measure_channel = Mock()
+        iv_runner.measure_coord([(1, 2), (3, 4)], verbose=0)
+        iv_runner.measure_channel.assert_called_once_with([18, 52], verbose=0)
+
+        cv_runner = CV_sw.__new__(CV_sw)
+        cv_runner.measure_channel = Mock()
+        cv_runner.measure_coord([(1, 2), (3, 4)], verbose=0)
+        cv_runner.measure_channel.assert_called_once_with([18, 52], verbose=0)
+
+    def test_iv_row_cleanup_runs_before_final_alloff(self):
+        runner = IV_sw.__new__(IV_sw)
+        runner.iv = FakeMeasurement()
+        runner.swm = FakeSwitchMatrix()
+        runner.dryrun = False
+        runner.measure_Vsweep = Mock(side_effect=RuntimeError("row failed"))
+
+        with patch("builtins.print"):
+            with self.assertRaisesRegex(RuntimeError, "row failed"):
+                runner.measure_rows([2], verbose=0)
+
+        self.assertEqual(
+            runner.swm.calls,
+            [("off_all",), ("on_row", 2), ("off_row", 2), ("off_all",)],
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

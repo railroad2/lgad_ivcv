@@ -1,50 +1,30 @@
-import os
-import sys
 import time
-import datetime
-import numpy as np
-
-#sys.path.append( os.path.dirname( os.path.abspath( os.path.dirname( os.path.abspath( os.path.dirname(__file__))))))
+from numbers import Integral
 
 from .IVMeasurement import IVMeasurement
 
-from lgad_ivcv.swmat import swmat
+from ..swmat import SWmat
 from ..inst import Keithley2400, Keithley6487
-from ..util.util import nch2rowcol, rowcol2nch
+from ..util.util import rowcol2nch
 
 
-class IV_sw():
-    # switching matrix
-    port = 'ws://localhost:8765'
-    swm = None
-    iv = None
-
-    # instruments 
-    smu = Keithley2400()
-    pau = Keithley6487()
-
-    # filename
-    sname = None
-
-    # voltage sweep
-    v0 = 0
-    v1 = -10
-    dv = 1
-    Icomp = 1e-5
-    return_swp = False
-    
-    rt_plot = False
-    dryrun = False
+class IV_sw:
 
     def __init__(self, port=None, dryrun=False):
-        ## Setup switching matrix
-        self.swm = swmat.SWmat(port)
-        self.iv  = IVMeasurement()
-
+        self.port = port or 'ws://localhost:8765'
+        self.swm = SWmat(port)
+        self.iv = IVMeasurement()
+        self.smu = Keithley2400()
+        self.pau = Keithley6487()
+        self.sname = None
+        self.v0 = 0
+        self.v1 = -10
+        self.dv = 1
+        self.Icomp = 1e-5
+        self.return_swp = False
+        self.rt_plot = False
         self.dryrun = dryrun
-
-        ## output path
-        self.iv.base_path = f"./IV_test"
+        self.iv.base_path = "./IV_test"
 
     def set_switching_matrix(self, port):
         self.port = port
@@ -107,43 +87,56 @@ class IV_sw():
         iv.measurement_thread.join()
 
     def measure_coord(self, coords, verbose=1):
-        self.iv.set_measurement_time()
-        swm = self.swm
+        self.measure_channel(rowcol2nch(coords), verbose=verbose)
 
-        print ('Turning off all switches.')
+    def measure_channel(self, channels, verbose=1):
+        self.iv.set_measurement_time()
+        if isinstance(channels, Integral):
+            channels = [int(channels)]
+
+        swm = self.swm
+        print('Turning off all switches.')
         swm.off_all()
 
-        t2 = time.time()
-        for row, col in coords:
-            if verbose: 
-                print ("-"*60)
-                print (f"Switch: ({row}, {col})")
+        started = time.time()
+        try:
+            for channel in channels:
+                channel = int(channel)
+                if not 0 <= channel <= 255:
+                    raise ValueError(f"Channel out of range: {channel}")
+                row, col = divmod(channel, 16)
 
-            swm.on(row, col)
-            time.sleep(0.1)
+                if verbose:
+                    print("-" * 60)
+                    print(f"Switch channel: {channel} ({row}, {col})")
 
-            if verbose: 
-                print ("Pinstat:")
-                print (swm.pinstat_all()) 
-            
-            if self.dryrun: 
-                print ('   dry run.')
-            else:
-                t0 = time.time()
-                self.measure_Vsweep(row, col) 
-                t1 = time.time()
-                print (f'   Elapsed time for sweep = {t1 - t0} s')
+                swm.on(channel)
+                try:
+                    if verbose:
+                        print("Pinstat:")
+                        print(swm.pinstat_all())
 
-            swm.off(row, col)
-            t3 = time.time()
-            print (f'*** Total time for measurement = {t3 - t2} s')
+                    if self.dryrun:
+                        print("   dry run.")
+                    else:
+                        sweep_started = time.time()
+                        self.measure_Vsweep(row, col)
+                        print(
+                            "   Elapsed time for sweep = "
+                            f"{time.time() - sweep_started} s"
+                        )
+                finally:
+                    swm.off(channel)
 
-            time.sleep(0.1)
-
-    def measure_channel(self, channels):
-        self.iv.set_measurement_time()
-        coords = nch2rowcol(channels)
-        self.measure_coord(coords)
+                print(
+                    "*** Total time for measurement = "
+                    f"{time.time() - started} s"
+                )
+        finally:
+            try:
+                swm.off_all()
+            except Exception as exc:
+                print(f"WARNING: failed to turn off all switches: {exc}")
 
     def measure_rows(self, rows=None, verbose=1):
         self.iv.set_measurement_time()
@@ -166,26 +159,26 @@ class IV_sw():
                     print(f"Switch row: {row}")
 
                 swm.on_row(row)
+                try:
+                    if verbose:
+                        print("Pinstat:")
+                        print(swm.pinstat_all())
 
-                if verbose:
-                    print("Pinstat:")
-                    print(swm.pinstat_all())
-
-                if self.dryrun:
-                    print(f'   dry run row: {row}')
-                else:
-                    t0 = time.time()
-                    self.measure_Vsweep(row, 0, target_label=f'row{row:02d}_allcol')
-                    t1 = time.time()
-                    print(f'   Elapsed time for row sweep = {t1 - t0} s')
-
-                swm.off_row(row)
+                    if self.dryrun:
+                        print(f'   dry run row: {row}')
+                    else:
+                        t0 = time.time()
+                        self.measure_Vsweep(row, 0, target_label=f'row{row:02d}_allcol')
+                        t1 = time.time()
+                        print(f'   Elapsed time for row sweep = {t1 - t0} s')
+                finally:
+                    swm.off_row(row)
 
         finally:
             try:
                 swm.off_all()
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"WARNING: failed to turn off all switches: {exc}")
 
     def measure_col(self, cols=None, verbose=1):
         self.iv.set_measurement_time()
@@ -208,29 +201,26 @@ class IV_sw():
                     print(f"Switch col: {col}")
 
                 swm.on_col(col)
+                try:
+                    if verbose:
+                        print("Pinstat:")
+                        print(swm.pinstat_all())
 
-                if verbose:
-                    print("Pinstat:")
-                    print(swm.pinstat_all())
-
-                if self.dryrun:
-                    print(f'   dry run col: {col}')
-                else:
-                    t0 = time.time()
-                    self.measure_Vsweep(0, col, target_label=f'allrow_col{col:02d}')
-                    t1 = time.time()
-                    print(f'   Elapsed time for col sweep = {t1 - t0} s')
-
-                swm.off_col(col)
+                    if self.dryrun:
+                        print(f'   dry run col: {col}')
+                    else:
+                        t0 = time.time()
+                        self.measure_Vsweep(0, col, target_label=f'allrow_col{col:02d}')
+                        t1 = time.time()
+                        print(f'   Elapsed time for col sweep = {t1 - t0} s')
+                finally:
+                    swm.off_col(col)
 
         finally:
             try:
                 swm.off_all()
-            except Exception:
-                pass
+            except Exception as exc:
+                print(f"WARNING: failed to turn off all switches: {exc}")
 
     def measure_all_channels(self):
-        self.iv.set_measurement_time()
-        cols, rows = np.meshgrid(np.arange(16), np.arange(16))
-        coords = np.array([rows.flatten(), cols.flatten()]).T
-        self.measure_coord(coords)
+        self.measure_channel(range(256))

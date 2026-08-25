@@ -1,65 +1,31 @@
-import os
-import sys
 import time
-import datetime
-import numpy as np
-
-sys.path.append(
-    os.path.dirname(
-        os.path.abspath(
-            os.path.dirname(
-                os.path.abspath(
-                    os.path.dirname(__file__)
-                )
-            )
-        )
-    )
-)
+from numbers import Integral
 
 from .CVMeasurement import CVMeasurement
 
-from lgad_ivcv.swmat import swmat
+from ..swmat import SWmat
 from ..inst import WayneKerr4300, Keithley6487
-from ..util.util import nch2rowcol, rowcol2nch
+from ..util.util import rowcol2nch
 
 
-class CV_sw():
-    # switching matrix
-    port = 'ws://localhost:3001'
-    swm = None
-    cv = None
-
-    # instruments
-    lcr = WayneKerr4300()
-    #pau = Keithley6487()
-    pau = None
-
-    # filename
-    sname = None
-
-    # voltage sweep
-    v0 = 0
-    v1 = -10
-    dv = 1
-    Icomp = 1e-5
-    return_swp = False
-
-    # lcr parameters
-    ac_level = 0.1
-    freq = 1000
-
-    # realtime plot
-    rt_plot = False
-    dryrun = False
+class CV_sw:
 
     def __init__(self, port=None, dryrun=False):
-        ## Setup switching matrix
-        self.swm = swmat.SWmat(port)
+        self.port = port or 'ws://localhost:3001'
+        self.swm = SWmat(port)
         self.cv = CVMeasurement()
-
+        self.lcr = WayneKerr4300()
+        self.pau = None
+        self.sname = None
+        self.v0 = 0
+        self.v1 = -10
+        self.dv = 1
+        self.Icomp = 1e-5
+        self.return_swp = False
+        self.ac_level = 0.1
+        self.freq = 1000
+        self.rt_plot = False
         self.dryrun = dryrun
-        if port is not None:
-            self.port = port
 
     def set_switching_matrix(self, port):
         self.port = port
@@ -129,37 +95,38 @@ class CV_sw():
         time.sleep(0.5)
 
     def measure_coord(self, coords, verbose=1):
-        swm = self.swm
+        self.measure_channel(rowcol2nch(coords), verbose=verbose)
 
+    def measure_channel(self, channels, verbose=1):
+        if isinstance(channels, Integral):
+            channels = [int(channels)]
+
+        swm = self.swm
         swm.off_all()
 
         try:
-            for row, col in coords:
-                swm.on(row, col)
+            for channel in channels:
+                channel = int(channel)
+                if not 0 <= channel <= 255:
+                    raise ValueError(f"Channel out of range: {channel}")
+                row, col = divmod(channel, 16)
+
+                swm.on(channel)
                 try:
                     if verbose:
                         print(swm.pinstat_all())
-
                     self.measure(row, col)
-
                 finally:
-                    swm.off(row, col)
+                    swm.off(channel)
                     if verbose:
                         print(swm.pinstat_all())
 
                 time.sleep(0.5)
-
         finally:
             try:
                 swm.off_all()
-            except Exception:
-                pass
-
-    def measure_channel(self, channels):
-        coords = nch2rowcol(channels)
-        self.measure_coord(coords)
+            except Exception as exc:
+                print(f"WARNING: failed to turn off all switches: {exc}")
 
     def measure_all_channels(self):
-        cols, rows = np.meshgrid(np.arange(16), np.arange(16))
-        coords = np.array([rows.flatten(), cols.flatten()]).T
-        self.measure_coord(coords)
+        self.measure_channel(range(256))

@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import QSettings, QThread, Qt
-from PySide6.QtGui import QCloseEvent, QShowEvent
+from PySide6.QtGui import QAction, QCloseEvent, QKeySequence, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QStatusBar,
+    QTabWidget,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -34,6 +35,7 @@ from ..ivcv.config import (
     resolve_switching_matrix_uri,
 )
 from .channel_grid import ChannelGrid
+from .cv_worker import CVRunConfig, CVWorker
 from .iv_worker import IVRunConfig, IVWorker
 
 
@@ -46,47 +48,182 @@ class MainWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("LGAD IV measurement")
+        self.setWindowTitle("LGAD IV/CV measurement")
         self.resize(770, 700)
 
         self._settings = QSettings()
         self._thread = None
         self._worker = None
+        self._active_measurement = None
         self._plot_voltage = []
         self._plot_pau = []
         self._plot_smu = []
+        self._cv_plot_voltage = []
+        self._cv_plot_capacitance = []
+        self._cv_plot_resistance = []
         self._log_file_path = None
+        self._cv_log_file_path = None
         self._channel_window_shown = False
 
         self._build_ui()
         self.measurement_mode_combo.currentIndexChanged.connect(
             self._measurement_mode_changed
         )
+        self.measurement_tabs.currentChanged.connect(self._measurement_tab_changed)
         self._load_settings()
-        self._measurement_mode_changed()
+        self._measurement_tab_changed(self.measurement_tabs.currentIndex())
         self._set_running(False)
 
     def _build_ui(self):
         central = QWidget()
         root = QVBoxLayout(central)
-        root.addLayout(self._build_settings_row())
-        root.addWidget(self._build_status_log(), 1)
-        root.addLayout(self._build_control_row())
+
+        self.measurement_tabs = QTabWidget()
+        self.measurement_tabs.addTab(self._build_iv_tab(), "IV")
+        self.measurement_tabs.addTab(self._build_cv_tab(), "CV")
+        self.measurement_tabs.setCurrentIndex(0)
+        root.addWidget(self.measurement_tabs)
 
         self.setCentralWidget(central)
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("Ready")
 
         self.channel_window = self._create_auxiliary_window(
-            "Measurement channels", self._build_channel_panel(), 575, 505
+            "Measurement channels", self._build_channel_panel(), 575, 540
         )
         self.live_iv_window = self._create_auxiliary_window(
             "Live IV", self._build_live_iv_panel(), 760, 600
         )
+        self.live_cv_window = self._create_auxiliary_window(
+            "Live CV", self._build_live_cv_panel(), 760, 700
+        )
+
+        file_menu = self.menuBar().addMenu("File")
+        self.exit_action = QAction("Exit", self)
+        self.exit_action.setShortcut(QKeySequence.Quit)
+        self.exit_action.triggered.connect(self.close)
+        file_menu.addAction(self.exit_action)
 
         view_menu = self.menuBar().addMenu("View")
         view_menu.addAction("Measurement channels", self._show_channel_window)
         view_menu.addAction("Live IV", self._show_live_iv_window)
+        view_menu.addAction("Live CV", self._show_live_cv_window)
+
+    def _build_iv_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.addLayout(self._build_settings_row())
+        layout.addWidget(self._build_status_log(), 1)
+        layout.addLayout(self._build_control_row())
+        return tab
+
+    def _build_cv_tab(self):
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.addLayout(self._build_cv_settings())
+        layout.addWidget(self._build_cv_status_log(), 1)
+        layout.addLayout(self._build_cv_control_row())
+        return tab
+
+    def _build_cv_settings(self):
+        settings = QVBoxLayout()
+        top_row = QHBoxLayout()
+
+        connection = QGroupBox("Instrument connection")
+        connection_form = QFormLayout(connection)
+        self.cv_port_edit = QLineEdit(resolve_switching_matrix_uri())
+        self.cv_lcr_edit = QLineEdit()
+        self.cv_lcr_edit.setPlaceholderText("Leave blank for automatic discovery")
+        self.cv_pau_edit = QLineEdit()
+        self.cv_pau_edit.setPlaceholderText("Optional external bias source")
+        self.cv_dry_run_check = QCheckBox("Dry run")
+        connection_form.addRow("Switching matrix", self.cv_port_edit)
+        connection_form.addRow("LCR VISA resource", self.cv_lcr_edit)
+        connection_form.addRow("PAU VISA resource", self.cv_pau_edit)
+        connection_form.addRow("", self.cv_dry_run_check)
+
+        measurement = QGroupBox("CV measurement settings")
+        measurement_form = QFormLayout(measurement)
+        self.cv_sensor_edit = QLineEdit("test")
+        self.cv_open_channels_button = QPushButton("Select channels...")
+        self.cv_open_channels_button.clicked.connect(self._show_channel_window)
+        self.cv_selection_summary_label = QLabel()
+        channel_row = QHBoxLayout()
+        channel_row.addWidget(self.cv_open_channels_button)
+        channel_row.addWidget(self.cv_selection_summary_label, 1)
+        self.cv_start_voltage_spin = self._voltage_spin(0.0)
+        self.cv_end_voltage_spin = self._voltage_spin(-10.0)
+        self.cv_step_spin = QDoubleSpinBox()
+        self.cv_step_spin.setDecimals(1)
+        self.cv_step_spin.setRange(0.1, 1000.0)
+        self.cv_step_spin.setSingleStep(0.1)
+        self.cv_step_spin.setValue(1.0)
+        self.cv_ac_level_spin = QDoubleSpinBox()
+        self.cv_ac_level_spin.setDecimals(3)
+        self.cv_ac_level_spin.setRange(0.001, 10.0)
+        self.cv_ac_level_spin.setSingleStep(0.01)
+        self.cv_ac_level_spin.setValue(0.1)
+        self.cv_frequency_spin = QDoubleSpinBox()
+        self.cv_frequency_spin.setDecimals(0)
+        self.cv_frequency_spin.setRange(1.0, 10_000_000.0)
+        self.cv_frequency_spin.setSingleStep(100.0)
+        self.cv_frequency_spin.setValue(1000.0)
+        self.cv_return_sweep_check = QCheckBox("Return sweep toward 0 V")
+        measurement_form.addRow("Measurement targets", channel_row)
+        measurement_form.addRow("Sensor name", self.cv_sensor_edit)
+        measurement_form.addRow("Start voltage (V)", self.cv_start_voltage_spin)
+        measurement_form.addRow("End voltage (V)", self.cv_end_voltage_spin)
+        measurement_form.addRow("Voltage step (V)", self.cv_step_spin)
+        measurement_form.addRow("AC level (V)", self.cv_ac_level_spin)
+        measurement_form.addRow("Frequency (Hz)", self.cv_frequency_spin)
+        measurement_form.addRow("", self.cv_return_sweep_check)
+
+        output = QGroupBox("Result storage")
+        output_form = QFormLayout(output)
+        self.cv_result_path_edit = QLineEdit(resolve_result_path())
+        self.cv_browse_button = QPushButton("Browse...")
+        self.cv_browse_button.clicked.connect(self._browse_cv_result_path)
+        result_row = QHBoxLayout()
+        result_row.addWidget(self.cv_result_path_edit, 1)
+        result_row.addWidget(self.cv_browse_button)
+        output_form.addRow("Result path", result_row)
+        env_path = os.environ.get("IVCV_RESULT_PATH")
+        source = "IVCV_RESULT_PATH" if env_path else "Default: ./result"
+        output_form.addRow("Initial value source", QLabel(source))
+
+        top_row.addWidget(connection, 1)
+        top_row.addWidget(measurement, 1)
+        settings.addLayout(top_row)
+        settings.addWidget(output)
+        return settings
+
+    def _build_cv_status_log(self):
+        log_group = QGroupBox("Status log")
+        log_layout = QVBoxLayout(log_group)
+        self.cv_log_edit = QTextEdit()
+        self.cv_log_edit.setReadOnly(True)
+        self.cv_log_edit.document().setMaximumBlockCount(1000)
+        log_layout.addWidget(self.cv_log_edit)
+        return log_group
+
+    def _build_cv_control_row(self):
+        row = QHBoxLayout()
+        self.cv_start_button = QPushButton("Start measurement")
+        self.cv_stop_button = QPushButton("Stop measurement / Output Off")
+        self.cv_stop_button.setStyleSheet("color: #b00020; font-weight: bold;")
+        self.cv_channel_progress = QProgressBar()
+        self.cv_point_progress = QProgressBar()
+        self.cv_channel_progress.setFormat("Channel %v/%m")
+        self.cv_point_progress.setFormat("Sweep %v/%m")
+        self.cv_channel_progress.setRange(0, 256)
+        self.cv_point_progress.setRange(0, 1)
+        self.cv_start_button.clicked.connect(self._start_cv_measurement)
+        self.cv_stop_button.clicked.connect(self._stop_cv_measurement)
+        row.addWidget(self.cv_start_button)
+        row.addWidget(self.cv_stop_button)
+        row.addWidget(self.cv_channel_progress, 1)
+        row.addWidget(self.cv_point_progress, 1)
+        return row
 
     def _create_auxiliary_window(self, title, content, width, height):
         window = QWidget(self, Qt.Window)
@@ -109,6 +246,9 @@ class MainWindow(QMainWindow):
 
     def _show_live_iv_window(self):
         self._show_window(self.live_iv_window)
+
+    def _show_live_cv_window(self):
+        self._show_window(self.live_cv_window)
 
     def _build_settings_row(self):
         settings = QVBoxLayout()
@@ -208,10 +348,12 @@ class MainWindow(QMainWindow):
 
         self.channel_grid = ChannelGrid()
         self.channel_grid.selection_changed.connect(self._channel_selection_changed)
-        scroll = QScrollArea()
-        scroll.setWidget(self.channel_grid)
-        scroll.setWidgetResizable(True)
-        layout.addWidget(scroll, 1)
+        self.channel_scroll = QScrollArea()
+        self.channel_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.channel_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.channel_scroll.setWidget(self.channel_grid)
+        self.channel_scroll.setWidgetResizable(True)
+        layout.addWidget(self.channel_scroll, 1)
         return panel
 
     def channel_grid_select_all(self):
@@ -238,6 +380,28 @@ class MainWindow(QMainWindow):
         self.log_scale_check.toggled.connect(self._refresh_plot)
         layout.addWidget(self.plot_widget, 1)
         layout.addWidget(self.log_scale_check)
+        return panel
+
+    def _build_live_cv_panel(self):
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        self.cv_capacitance_plot = pg.PlotWidget()
+        self.cv_capacitance_plot.setLabel("bottom", "Bias voltage", units="V")
+        self.cv_capacitance_plot.setLabel("left", "Capacitance", units="pF")
+        self.cv_capacitance_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.cv_capacitance_curve = self.cv_capacitance_plot.plot(
+            pen=pg.mkPen("#3daee9", width=2), symbol="o", symbolSize=5
+        )
+        self.cv_resistance_plot = pg.PlotWidget()
+        self.cv_resistance_plot.setLabel("bottom", "Bias voltage", units="V")
+        self.cv_resistance_plot.setLabel("left", "Resistance", units="Ohm")
+        self.cv_resistance_plot.showGrid(x=True, y=True, alpha=0.3)
+        self.cv_resistance_plot.setLogMode(y=True)
+        self.cv_resistance_curve = self.cv_resistance_plot.plot(
+            pen=pg.mkPen("#e6a23c", width=2), symbol="o", symbolSize=5
+        )
+        layout.addWidget(self.cv_capacitance_plot, 1)
+        layout.addWidget(self.cv_resistance_plot, 1)
         return panel
 
     def _build_status_log(self):
@@ -268,14 +432,24 @@ class MainWindow(QMainWindow):
         row.addWidget(self.point_progress, 1)
         return row
 
-    def _channel_selection_changed(self, count):
+    def _channel_selection_changed(self, _count=None):
+        if self.measurement_tabs.currentIndex() == 1:
+            count = len(self.channel_grid.selected_channels())
+            selection_text = f"{count} channels selected"
+            self.channel_count_label.setText(selection_text)
+            self.cv_selection_summary_label.setText(selection_text)
+            return
+
         mode = self.measurement_mode_combo.currentData() or "channel"
         plural = self.MODE_LABELS[mode][1]
+        count = len(self.channel_grid.selected_targets())
         selection_text = f"{count} {plural} selected"
         self.channel_count_label.setText(selection_text)
         self.selection_summary_label.setText(selection_text)
 
     def _measurement_mode_changed(self, _index=None):
+        if self.measurement_tabs.currentIndex() != 0:
+            return
         mode = self.measurement_mode_combo.currentData() or "channel"
         singular, plural = self.MODE_LABELS[mode]
         self.channel_grid.set_selection_mode(mode)
@@ -285,6 +459,14 @@ class MainWindow(QMainWindow):
             len(self.channel_grid.selected_targets())
         )
 
+    def _measurement_tab_changed(self, index):
+        if index == 1:
+            self.channel_grid.set_selection_mode("channel")
+            self.channel_window.setWindowTitle("CV measurement channels")
+            self._channel_selection_changed()
+        else:
+            self._measurement_mode_changed()
+
     def _browse_result_path(self):
         path = QFileDialog.getExistingDirectory(
             self,
@@ -293,6 +475,15 @@ class MainWindow(QMainWindow):
         )
         if path:
             self.result_path_edit.setText(path)
+
+    def _browse_cv_result_path(self):
+        path = QFileDialog.getExistingDirectory(
+            self,
+            "Select CV result directory",
+            self.cv_result_path_edit.text() or ".",
+        )
+        if path:
+            self.cv_result_path_edit.setText(path)
 
     @staticmethod
     def _optional_text(widget):
@@ -344,7 +535,51 @@ class MainWindow(QMainWindow):
             targets=targets,
         )
 
+    def _make_cv_config(self):
+        port = self.cv_port_edit.text().strip()
+        sensor_name = self.cv_sensor_edit.text().strip()
+        result_path = self.cv_result_path_edit.text().strip()
+        targets = tuple(self.channel_grid.selected_channels())
+
+        if not port:
+            raise ValueError("Enter a switching matrix port.")
+        if not sensor_name:
+            raise ValueError("Enter a sensor name.")
+        if not result_path:
+            raise ValueError("Enter a result path.")
+        if not targets:
+            raise ValueError("Select at least one measurement channel.")
+
+        start_voltage = self.cv_start_voltage_spin.value()
+        end_voltage = self.cv_end_voltage_spin.value()
+        if start_voltage > 0 or end_voltage > 0:
+            raise ValueError("CV bias voltage must be 0 V or below.")
+        pau_resource = self._optional_text(self.cv_pau_edit)
+        if pau_resource is None and min(start_voltage, end_voltage) < -40:
+            raise ValueError(
+                "The LCR internal bias is limited to -40 V. "
+                "Enter a PAU resource for a larger negative bias."
+            )
+
+        return CVRunConfig(
+            port=port,
+            lcr_resource=self._optional_text(self.cv_lcr_edit),
+            pau_resource=pau_resource,
+            sensor_name=sensor_name,
+            result_path=result_path,
+            start_voltage=start_voltage,
+            end_voltage=end_voltage,
+            voltage_step=self.cv_step_spin.value(),
+            ac_level=self.cv_ac_level_spin.value(),
+            frequency=self.cv_frequency_spin.value(),
+            return_sweep=self.cv_return_sweep_check.isChecked(),
+            dry_run=self.cv_dry_run_check.isChecked(),
+            targets=targets,
+        )
+
     def _start_measurement(self):
+        if self._worker is not None:
+            return
         try:
             config = self._make_config()
         except ValueError as exc:
@@ -356,6 +591,7 @@ class MainWindow(QMainWindow):
         self._plot_pau.clear()
         self._plot_smu.clear()
         self._refresh_plot()
+        self._log_file_path = None
         self.log_edit.clear()
         self.channel_progress.setRange(0, len(config.targets))
         self.channel_progress.setValue(0)
@@ -381,11 +617,60 @@ class MainWindow(QMainWindow):
 
         self._thread = thread
         self._worker = worker
-        self._set_running(True)
+        self._active_measurement = "iv"
+        self._set_running(True, "iv")
         self._show_live_iv_window()
         plural = self.MODE_LABELS[config.measurement_mode][1]
         self._append_log(
             f"Measurement started: {len(config.targets)} {plural}"
+        )
+        thread.start()
+
+    def _start_cv_measurement(self):
+        if self._worker is not None:
+            return
+        try:
+            config = self._make_cv_config()
+        except ValueError as exc:
+            QMessageBox.warning(self, "Check CV measurement settings", str(exc))
+            return
+
+        self._save_settings()
+        self._cv_plot_voltage.clear()
+        self._cv_plot_capacitance.clear()
+        self._cv_plot_resistance.clear()
+        self._refresh_cv_plot()
+        self._cv_log_file_path = None
+        self.cv_log_edit.clear()
+        self.cv_channel_progress.setRange(0, len(config.targets))
+        self.cv_channel_progress.setValue(0)
+        self.cv_point_progress.setRange(0, 1)
+        self.cv_point_progress.setValue(0)
+
+        thread = QThread(self)
+        worker = CVWorker(config)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.status_changed.connect(self.statusBar().showMessage)
+        worker.log_message.connect(self._append_cv_log)
+        worker.target_started.connect(self._cv_target_started)
+        worker.target_completed.connect(self._cv_target_completed)
+        worker.point_measured.connect(self._cv_point_measured)
+        worker.result_path_ready.connect(self._cv_result_path_ready)
+        worker.completed.connect(self._cv_measurement_completed)
+        worker.failed.connect(self._cv_measurement_failed)
+        worker.completed.connect(thread.quit)
+        worker.failed.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(self._thread_finished)
+
+        self._thread = thread
+        self._worker = worker
+        self._active_measurement = "cv"
+        self._set_running(True, "cv")
+        self._show_live_cv_window()
+        self._append_cv_log(
+            f"CV measurement started: {len(config.targets)} channels"
         )
         thread.start()
 
@@ -397,11 +682,26 @@ class MainWindow(QMainWindow):
             return
         self._append_log(f"Status log: {self._log_file_path}")
 
+    def _cv_result_path_ready(self, result_path):
+        try:
+            self._start_cv_file_log(result_path)
+        except OSError as exc:
+            self._append_cv_log(f"Cannot create status log: {exc}")
+            return
+        self._append_cv_log(f"Status log: {self._cv_log_file_path}")
+
     def _stop_measurement(self):
-        if self._worker is None:
+        if self._worker is None or self._active_measurement != "iv":
             return
         self.stop_button.setEnabled(False)
         self._append_log("Safe stop requested by user.")
+        self._worker.request_stop()
+
+    def _stop_cv_measurement(self):
+        if self._worker is None or self._active_measurement != "cv":
+            return
+        self.cv_stop_button.setEnabled(False)
+        self._append_cv_log("Safe stop requested by user.")
         self._worker.request_stop()
 
     def _target_started(self, mode, target, index, total):
@@ -422,6 +722,23 @@ class MainWindow(QMainWindow):
         self.channel_progress.setValue(index + 1)
         singular = self.MODE_LABELS[mode][0]
         self._append_log(f"{singular} {target} measurement completed.")
+
+    def _cv_target_started(self, target, index, total):
+        self._cv_plot_voltage.clear()
+        self._cv_plot_capacitance.clear()
+        self._cv_plot_resistance.clear()
+        self._refresh_cv_plot()
+        self.cv_point_progress.setRange(0, 1)
+        self.cv_point_progress.setValue(0)
+        self.cv_channel_progress.setRange(0, total)
+        self.cv_channel_progress.setValue(index)
+        self._append_cv_log(
+            f"Channel {target} CV measurement started ({index + 1}/{total})."
+        )
+
+    def _cv_target_completed(self, target, index, total):
+        self.cv_channel_progress.setValue(index + 1)
+        self._append_cv_log(f"Channel {target} CV measurement completed.")
 
     def _point_measured(
         self,
@@ -455,6 +772,34 @@ class MainWindow(QMainWindow):
         self.pau_curve.setData(self._plot_voltage, pau)
         self.smu_curve.setData(self._plot_voltage, smu)
 
+    def _cv_point_measured(
+        self,
+        target,
+        voltage,
+        capacitance,
+        resistance,
+        current_pau,
+        index,
+        total,
+    ):
+        self._cv_plot_voltage.append(voltage)
+        self._cv_plot_capacitance.append(capacitance)
+        self._cv_plot_resistance.append(resistance)
+        self.cv_point_progress.setRange(0, max(total, 1))
+        self.cv_point_progress.setValue(index)
+        self._refresh_cv_plot()
+        self.statusBar().showMessage(
+            f"Channel {target}: {voltage:.1f} V, "
+            f"C {capacitance * 1e12:.4g} pF, R {resistance:.4g} Ohm, "
+            f"PAU {current_pau:.4g} A"
+        )
+
+    def _refresh_cv_plot(self):
+        capacitance_pf = np.asarray(self._cv_plot_capacitance, dtype=float) * 1e12
+        resistance = np.abs(np.asarray(self._cv_plot_resistance, dtype=float))
+        self.cv_capacitance_curve.setData(self._cv_plot_voltage, capacitance_pf)
+        self.cv_resistance_curve.setData(self._cv_plot_voltage, resistance)
+
     def _measurement_completed(self, stopped, result_path):
         if stopped:
             message = "Measurement stopped safely."
@@ -479,10 +824,32 @@ class MainWindow(QMainWindow):
             f"{message}\n\nAttempted 0 V, output off, and switch off_all.",
         )
 
+    def _cv_measurement_completed(self, stopped, result_path):
+        message = (
+            "CV measurement stopped safely."
+            if stopped
+            else "All CV measurements completed."
+        )
+        self._append_cv_log(message)
+        self._append_cv_log(f"Result path: {result_path}")
+        self.statusBar().showMessage(message)
+
+    def _cv_measurement_failed(self, message):
+        self._append_cv_log(f"CV measurement failed: {message}")
+        self.statusBar().showMessage(
+            "CV measurement failed — safe output shutdown was attempted."
+        )
+        QMessageBox.critical(
+            self,
+            "CV measurement failed",
+            f"{message}\n\nAttempted 0 V, output off, and switch off_all.",
+        )
+
     def _thread_finished(self):
         thread = self._thread
         self._worker = None
         self._thread = None
+        self._active_measurement = None
         self._set_running(False)
         if thread is not None:
             thread.deleteLater()
@@ -493,6 +860,14 @@ class MainWindow(QMainWindow):
         self.log_edit.append(entry)
         if self._log_file_path is not None:
             with self._log_file_path.open("a", encoding="utf-8") as log_file:
+                log_file.write(entry + "\n")
+
+    def _append_cv_log(self, message):
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        entry = f"[{timestamp}] {message.rstrip()}"
+        self.cv_log_edit.append(entry)
+        if self._cv_log_file_path is not None:
+            with self._cv_log_file_path.open("a", encoding="utf-8") as log_file:
                 log_file.write(entry + "\n")
 
     def _start_file_log(self, result_path):
@@ -515,9 +890,32 @@ class MainWindow(QMainWindow):
                 path.write_text(existing_log + "\n", encoding="utf-8")
             return path
 
-    def _set_running(self, running):
+    def _start_cv_file_log(self, result_path):
+        self._cv_log_file_path = None
+        directory = Path(result_path).expanduser()
+        directory.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S")
+
+        version = 0
+        while True:
+            path = directory / f"CV_GUI_{timestamp}_v{version}.log"
+            try:
+                path.touch(exist_ok=False)
+            except FileExistsError:
+                version += 1
+                continue
+            self._cv_log_file_path = path
+            existing_log = self.cv_log_edit.toPlainText()
+            if existing_log:
+                path.write_text(existing_log + "\n", encoding="utf-8")
+            return path
+
+    def _set_running(self, running, active_measurement=None):
         self.start_button.setEnabled(not running)
-        self.stop_button.setEnabled(running)
+        self.cv_start_button.setEnabled(not running)
+        self.stop_button.setEnabled(running and active_measurement == "iv")
+        self.cv_stop_button.setEnabled(running and active_measurement == "cv")
+        self.measurement_tabs.tabBar().setEnabled(not running)
         for widget in (
             self.port_edit,
             self.smu_edit,
@@ -532,9 +930,24 @@ class MainWindow(QMainWindow):
             self.return_sweep_check,
             self.result_path_edit,
             self.browse_button,
+            self.cv_port_edit,
+            self.cv_lcr_edit,
+            self.cv_pau_edit,
+            self.cv_dry_run_check,
+            self.cv_sensor_edit,
+            self.cv_start_voltage_spin,
+            self.cv_end_voltage_spin,
+            self.cv_step_spin,
+            self.cv_ac_level_spin,
+            self.cv_frequency_spin,
+            self.cv_return_sweep_check,
+            self.cv_result_path_edit,
+            self.cv_browse_button,
             self.channel_grid,
             self.select_all_button,
             self.clear_all_button,
+            self.open_channels_button,
+            self.cv_open_channels_button,
         ):
             widget.setEnabled(not running)
 
@@ -567,18 +980,52 @@ class MainWindow(QMainWindow):
         self.dry_run_check.setChecked(
             self._settings.value("iv/dry_run", False, type=bool)
         )
+        if SWITCHING_MATRIX_URI_ENV not in os.environ:
+            self.cv_port_edit.setText(
+                self._settings.value("cv/port", resolve_switching_matrix_uri())
+            )
+        self.cv_lcr_edit.setText(self._settings.value("cv/lcr", ""))
+        self.cv_pau_edit.setText(self._settings.value("cv/pau", ""))
+        self.cv_sensor_edit.setText(self._settings.value("cv/sensor", "test"))
+        self.cv_result_path_edit.setText(
+            self._settings.value("cv/result_path", self.cv_result_path_edit.text())
+        )
+        self.cv_start_voltage_spin.setValue(
+            self._settings.value("cv/start_voltage", 0.0, type=float)
+        )
+        self.cv_end_voltage_spin.setValue(
+            self._settings.value("cv/end_voltage", -10.0, type=float)
+        )
+        self.cv_step_spin.setValue(
+            self._settings.value("cv/voltage_step", 1.0, type=float)
+        )
+        self.cv_ac_level_spin.setValue(
+            self._settings.value("cv/ac_level", 0.1, type=float)
+        )
+        self.cv_frequency_spin.setValue(
+            self._settings.value("cv/frequency", 1000.0, type=float)
+        )
+        self.cv_return_sweep_check.setChecked(
+            self._settings.value("cv/return_sweep", False, type=bool)
+        )
+        self.cv_dry_run_check.setChecked(
+            self._settings.value("cv/dry_run", False, type=bool)
+        )
         saved_mode = self._settings.value("iv/measurement_mode", "channel")
         mode_index = self.measurement_mode_combo.findData(saved_mode)
         self.measurement_mode_combo.setCurrentIndex(max(mode_index, 0))
         geometry = self._settings.value("gui/main_window_geometry_v3")
         if geometry is not None:
             self.restoreGeometry(geometry)
-        channel_geometry = self._settings.value("gui/channel_window_geometry_v2")
+        channel_geometry = self._settings.value("gui/channel_window_geometry_v3")
         if channel_geometry is not None:
             self.channel_window.restoreGeometry(channel_geometry)
         live_iv_geometry = self._settings.value("gui/live_iv_window_geometry")
         if live_iv_geometry is not None:
             self.live_iv_window.restoreGeometry(live_iv_geometry)
+        live_cv_geometry = self._settings.value("gui/live_cv_window_geometry")
+        if live_cv_geometry is not None:
+            self.live_cv_window.restoreGeometry(live_cv_geometry)
 
     def _save_settings(self):
         self._settings.setValue("iv/port", self.port_edit.text())
@@ -596,12 +1043,31 @@ class MainWindow(QMainWindow):
             "iv/measurement_mode",
             self.measurement_mode_combo.currentData(),
         )
+        self._settings.setValue("cv/port", self.cv_port_edit.text())
+        self._settings.setValue("cv/lcr", self.cv_lcr_edit.text())
+        self._settings.setValue("cv/pau", self.cv_pau_edit.text())
+        self._settings.setValue("cv/sensor", self.cv_sensor_edit.text())
+        self._settings.setValue("cv/result_path", self.cv_result_path_edit.text())
+        self._settings.setValue(
+            "cv/start_voltage", self.cv_start_voltage_spin.value()
+        )
+        self._settings.setValue("cv/end_voltage", self.cv_end_voltage_spin.value())
+        self._settings.setValue("cv/voltage_step", self.cv_step_spin.value())
+        self._settings.setValue("cv/ac_level", self.cv_ac_level_spin.value())
+        self._settings.setValue("cv/frequency", self.cv_frequency_spin.value())
+        self._settings.setValue(
+            "cv/return_sweep", self.cv_return_sweep_check.isChecked()
+        )
+        self._settings.setValue("cv/dry_run", self.cv_dry_run_check.isChecked())
         self._settings.setValue("gui/main_window_geometry_v3", self.saveGeometry())
         self._settings.setValue(
-            "gui/channel_window_geometry_v2", self.channel_window.saveGeometry()
+            "gui/channel_window_geometry_v3", self.channel_window.saveGeometry()
         )
         self._settings.setValue(
             "gui/live_iv_window_geometry", self.live_iv_window.saveGeometry()
+        )
+        self._settings.setValue(
+            "gui/live_cv_window_geometry", self.live_cv_window.saveGeometry()
         )
 
     def showEvent(self, event: QShowEvent):
@@ -612,7 +1078,10 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent):
         if self._worker is not None:
-            self._stop_measurement()
+            if self._active_measurement == "cv":
+                self._stop_cv_measurement()
+            else:
+                self._stop_measurement()
             QMessageBox.information(
                 self,
                 "Stopping measurement",
@@ -623,4 +1092,5 @@ class MainWindow(QMainWindow):
         self._save_settings()
         self.channel_window.close()
         self.live_iv_window.close()
+        self.live_cv_window.close()
         event.accept()

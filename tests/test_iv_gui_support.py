@@ -2,6 +2,7 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
+from lgad_ivcv.ivcv.CVMeasurement import CVMeasurement
 from lgad_ivcv.ivcv.IVMeasurement import IVMeasurement
 from lgad_ivcv.ivcv.iv_sw import IV_sw
 from lgad_ivcv.util.thread import BaseThread
@@ -53,6 +54,19 @@ class IVGuiSupportTests(unittest.TestCase):
         measurement._update_measurement_array(-1, 0)
 
         callback.assert_called_once_with((-1, 0, -2e-6))
+
+    def test_cv_measurement_data_callback_receives_each_point(self):
+        measurement = CVMeasurement()
+        callback = Mock()
+        measurement.set_data_callback(callback)
+        measurement.lcr = Mock()
+        measurement.lcr.measure.return_value = (2e-12, 3e6)
+        measurement.pau = None
+        measurement.voltage_array = [-1]
+
+        measurement._update_measurement_array(-1, 0)
+
+        callback.assert_called_once_with((-1, 2e-12, 3e6, 0))
 
     def test_measurement_thread_failure_is_raised_by_joiner(self):
         def fail():

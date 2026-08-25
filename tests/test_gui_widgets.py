@@ -7,15 +7,18 @@ from unittest.mock import patch
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PySide6.QtCore import QSettings
+    from PySide6.QtCore import QSettings, Qt
     from PySide6.QtWidgets import QApplication
 
     from lgad_ivcv.gui.channel_grid import ChannelGrid
+    from lgad_ivcv.gui.cv_worker import CVRunConfig, CVWorker
     from lgad_ivcv.gui.iv_worker import IVRunConfig, IVWorker
     from lgad_ivcv.gui.main_window import MainWindow
 except ImportError:
     QApplication = None
     ChannelGrid = None
+    CVRunConfig = None
+    CVWorker = None
     IVRunConfig = None
     IVWorker = None
     MainWindow = None
@@ -145,6 +148,55 @@ class FakeIVRunner:
         pass
 
 
+class FakeCVMeasurement(FakeIVMeasurement):
+    pass
+
+
+class FakeCVRunner:
+    def __init__(self, *_args):
+        self.cv = FakeCVMeasurement()
+        self.ac_level = None
+        self.freq = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def set_basepath(self, _path):
+        pass
+
+    def set_sensor_name(self, _name):
+        pass
+
+    def prepare_output_directory(self):
+        return self.cv.get_out_dir()
+
+    def set_lcr(self, _resource):
+        pass
+
+    def set_pau(self, _resource):
+        pass
+
+    def set_sweep(self, *_args):
+        pass
+
+    def measure_channel(self, channels, on_channel_start, on_channel_complete):
+        channel = channels[0]
+        on_channel_start(channel, 0, 1)
+        point = [-1.0, 2e-12, 3e6, 4e-9]
+        self.cv.output_arr.append(point)
+        self.cv.callback(point)
+        on_channel_complete(channel, 0, 1)
+
+    def stop_requested(self):
+        return False
+
+    def request_stop(self):
+        pass
+
+
 @unittest.skipIf(QApplication is None, "PySide6 is not installed")
 class IVWorkerTests(unittest.TestCase):
     def test_worker_dispatches_all_measurement_modes(self):
@@ -188,6 +240,43 @@ class IVWorkerTests(unittest.TestCase):
 
 
 @unittest.skipIf(QApplication is None, "PySide6 is not installed")
+class CVWorkerTests(unittest.TestCase):
+    def test_worker_emits_cv_progress_and_measurement_point(self):
+        config = CVRunConfig(
+            port="ws://test:8765",
+            lcr_resource=None,
+            pau_resource=None,
+            sensor_name="sensor",
+            result_path="/tmp/result",
+            start_voltage=0,
+            end_voltage=-10,
+            voltage_step=1,
+            ac_level=0.1,
+            frequency=1000,
+            return_sweep=False,
+            dry_run=True,
+            targets=(7,),
+        )
+        worker = CVWorker(config)
+        points = []
+        starts = []
+        completions = []
+        worker.point_measured.connect(lambda *args: points.append(args))
+        worker.target_started.connect(lambda *args: starts.append(args))
+        worker.completed.connect(lambda *args: completions.append(args))
+
+        with patch("lgad_ivcv.gui.cv_worker.CV_sw", FakeCVRunner):
+            worker.run()
+
+        self.assertEqual(starts, [(7, 0, 1)])
+        self.assertEqual(
+            points,
+            [(7, -1.0, 2e-12, 3e6, 4e-9, 1, 1)],
+        )
+        self.assertEqual(completions, [(False, "/tmp/result/measurement")])
+
+
+@unittest.skipIf(QApplication is None, "PySide6 is not installed")
 class MainWindowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -201,13 +290,74 @@ class MainWindowTests(unittest.TestCase):
 
         self.assertTrue(window.channel_window.isWindow())
         self.assertTrue(window.live_iv_window.isWindow())
+        self.assertTrue(window.live_cv_window.isWindow())
         self.assertIsNot(window.channel_grid.window(), window)
         self.assertIsNot(window.plot_widget.window(), window)
         self.assertIs(window.log_edit.window(), window)
         self.assertFalse(window.live_iv_window.isVisible())
+        self.assertFalse(window.live_cv_window.isVisible())
 
         window._show_live_iv_window()
         self.assertTrue(window.live_iv_window.isVisible())
+
+        window.close()
+
+    def test_cv_tab_builds_valid_channel_measurement_config(self):
+        window = MainWindow()
+        window.measurement_tabs.setCurrentIndex(1)
+        window.channel_grid.clear_all()
+        window.channel_grid._buttons[1][2].setChecked(True)
+        window.cv_sensor_edit.setText("cv_sensor")
+        window.cv_lcr_edit.setText("GPIB0::10::INSTR")
+
+        config = window._make_cv_config()
+
+        self.assertEqual(config.targets, (18,))
+        self.assertEqual(config.sensor_name, "cv_sensor")
+        self.assertEqual(config.lcr_resource, "GPIB0::10::INSTR")
+        self.assertEqual(config.ac_level, 0.1)
+        self.assertEqual(config.frequency, 1000.0)
+
+        window.close()
+
+    def test_main_window_has_iv_and_cv_tabs_and_file_exit(self):
+        window = MainWindow()
+
+        self.assertEqual(window.measurement_tabs.count(), 2)
+        self.assertEqual(
+            [
+                window.measurement_tabs.tabText(index)
+                for index in range(window.measurement_tabs.count())
+            ],
+            ["IV", "CV"],
+        )
+        self.assertEqual(window.measurement_tabs.currentIndex(), 0)
+        file_menu = next(
+            action.menu()
+            for action in window.menuBar().actions()
+            if action.text() == "File"
+        )
+        self.assertIn("Exit", [action.text() for action in file_menu.actions()])
+
+        window.close()
+
+    def test_channel_grid_fits_without_scroll_bars(self):
+        window = MainWindow()
+        window.channel_window.show()
+        self.app.processEvents()
+
+        self.assertEqual(
+            window.channel_scroll.horizontalScrollBarPolicy(),
+            Qt.ScrollBarAlwaysOff,
+        )
+        self.assertEqual(
+            window.channel_scroll.verticalScrollBarPolicy(),
+            Qt.ScrollBarAlwaysOff,
+        )
+        self.assertGreaterEqual(
+            window.channel_scroll.viewport().height(),
+            window.channel_grid.minimumSizeHint().height(),
+        )
 
         window.close()
 

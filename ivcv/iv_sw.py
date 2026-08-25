@@ -82,6 +82,7 @@ class IV_sw:
 
     def set_sensor_name(self, sname):
         self.sname = sname
+        self.iv.sensor_name = sname
 
     def set_basepath(self, basepath):
         self.iv.base_path = basepath

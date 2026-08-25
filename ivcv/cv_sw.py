@@ -1,4 +1,5 @@
 import time
+import threading
 from numbers import Integral
 
 from .CVMeasurement import CVMeasurement
@@ -32,6 +33,7 @@ class CV_sw:
         self.freq = 1000
         self.rt_plot = False
         self.dryrun = dryrun
+        self._stop_requested = threading.Event()
 
     def set_switching_matrix(self, port):
         self.port = port
@@ -78,19 +80,40 @@ class CV_sw:
 
         self.pau_rsrc = pau_rsrc
         if pau_rsrc is not None:
+            self.pau = Keithley6487()
             self.pau.open(pau_rsrc)
 
     def set_sensor_name(self, sname):
         self.sname = sname
+        self.cv.sensor_name = sname
 
     def set_basepath(self, basepath):
         self.cv.base_path = basepath
+
+    def prepare_output_directory(self):
+        """Create the CV session directory before instruments start measuring."""
+        if not self.cv.get_out_dir():
+            self.cv.set_measurement_time()
+            self.cv.prepare_output_directory(prefix="CV")
+        return self.cv.get_out_dir()
 
     def set_sweep(self, v0, v1, dv=1, return_swp=False):
         self.v0 = v0
         self.v1 = v1
         self.dv = dv
         self.return_swp = return_swp
+
+    def request_stop(self):
+        """Request a safe stop from another thread."""
+        if not hasattr(self, "_stop_requested"):
+            self._stop_requested = threading.Event()
+        self._stop_requested.set()
+        if hasattr(self.cv, "event"):
+            self.cv.event.set()
+
+    def stop_requested(self):
+        event = getattr(self, "_stop_requested", None)
+        return event is not None and event.is_set()
 
     def measure(self, row=0, col=0, target_label=None):
         v0, v1, dv = self.v0, self.v1, self.dv
@@ -120,19 +143,37 @@ class CV_sw:
     def measure_coord(self, coords, verbose=1):
         self.measure_channel(rowcol2nch(coords), verbose=verbose)
 
-    def measure_channel(self, channels, verbose=1):
+    def measure_channel(
+        self,
+        channels,
+        verbose=1,
+        on_channel_start=None,
+        on_channel_complete=None,
+    ):
+        self.prepare_output_directory()
         if isinstance(channels, Integral):
             channels = [int(channels)]
+        else:
+            channels = list(channels)
 
         swm = self.swm
         swm.off_all()
 
         try:
-            for channel in channels:
+            for index, channel in enumerate(channels):
+                if self.stop_requested():
+                    break
+
                 channel = int(channel)
                 if not 0 <= channel <= 255:
                     raise ValueError(f"Channel out of range: {channel}")
                 row, col = divmod(channel, 16)
+
+                if on_channel_start is not None:
+                    on_channel_start(channel, index, len(channels))
+
+                if self.stop_requested():
+                    break
 
                 swm.on(channel)
                 try:
@@ -144,6 +185,11 @@ class CV_sw:
                     if verbose:
                         print(swm.pinstat_all())
 
+                if on_channel_complete is not None:
+                    on_channel_complete(channel, index, len(channels))
+
+                if self.stop_requested():
+                    break
                 time.sleep(0.5)
         finally:
             try:

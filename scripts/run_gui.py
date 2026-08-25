@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the LGAD IV measurement GUI from this repository checkout."""
+"""Launch the LGAD IV/CV measurement GUI from this repository checkout."""
 
 import sys
 from pathlib import Path

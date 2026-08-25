@@ -209,8 +209,10 @@ class CVMeasurement(Measurement):
 
         # print(voltage_pau, capacitance, resistance, current_pau)
         self.measurement_arr.append([voltage_out, capacitance, resistance, current_pau])
-        self.output_arr.append([voltage_out, capacitance])
+        point = [voltage_out, capacitance, resistance, current_pau]
+        self.output_arr.append(point)
         self.set_status_str(index, is_forced_return)
+        self.emit_data_point(point)
 
     def start_measurement(self):
         try:
@@ -251,7 +253,7 @@ class CVMeasurement(Measurement):
         fig = plt.Figure()
         ax = fig.add_subplot()
 
-        if v[1] < 0:
+        if len(v) and v[0] < 0:
             v = -1 * v
 
         ax.plot(v, c * 1e9, 'x-', color='tab:blue', markersize=5, linewidth=0.5, label="$C$")

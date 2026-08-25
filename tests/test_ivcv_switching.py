@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
@@ -56,6 +57,26 @@ class FakeMeasurement:
 
 
 class SwitchingMeasurementTests(unittest.TestCase):
+    def test_iv_and_cv_prepare_named_session_directories(self):
+        for runner_type, prefix, measurement_name in (
+            (IV_sw, "IV", "iv"),
+            (CV_sw, "CV", "cv"),
+        ):
+            with self.subTest(runner=runner_type.__name__):
+                with tempfile.TemporaryDirectory() as result_path:
+                    runner = runner_type(port=None, dryrun=True)
+                    runner.set_basepath(result_path)
+                    runner.set_sensor_name("sensor")
+
+                    output_path = runner.prepare_output_directory()
+
+                    self.assertIn(f"/{prefix}_", output_path)
+                    self.assertIn("/sensor/", output_path)
+                    self.assertEqual(
+                        getattr(runner, measurement_name).sensor_name,
+                        "sensor",
+                    )
+
     def test_iv_channel_uses_linear_pin_and_cleans_up_on_failure(self):
         runner = IV_sw.__new__(IV_sw)
         runner.iv = FakeMeasurement()
@@ -76,7 +97,9 @@ class SwitchingMeasurementTests(unittest.TestCase):
 
     def test_cv_channel_uses_linear_pin_and_cleans_up_on_failure(self):
         runner = CV_sw.__new__(CV_sw)
+        runner.cv = FakeMeasurement()
         runner.swm = FakeSwitchMatrix()
+        runner._stop_requested = None
         runner.measure = Mock(side_effect=RuntimeError("CV failed"))
 
         with patch("builtins.print"):
@@ -88,6 +111,26 @@ class SwitchingMeasurementTests(unittest.TestCase):
             runner.swm.calls,
             [("off_all",), ("on", 35), ("off", 35), ("off_all",)],
         )
+
+    def test_cv_channel_callbacks_report_progress(self):
+        runner = CV_sw.__new__(CV_sw)
+        runner.cv = FakeMeasurement()
+        runner.swm = FakeSwitchMatrix()
+        runner._stop_requested = None
+        runner.measure = Mock()
+        starts = []
+        completions = []
+
+        with patch("builtins.print"):
+            runner.measure_channel(
+                [3, 17],
+                verbose=0,
+                on_channel_start=lambda *args: starts.append(args),
+                on_channel_complete=lambda *args: completions.append(args),
+            )
+
+        self.assertEqual(starts, [(3, 0, 2), (17, 1, 2)])
+        self.assertEqual(completions, starts)
 
     def test_coordinate_input_is_only_a_compatibility_conversion(self):
         iv_runner = IV_sw.__new__(IV_sw)

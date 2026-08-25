@@ -100,7 +100,9 @@ class IVWorker(QObject):
 
                 runner.set_basepath(config.result_path)
                 runner.set_sensor_name(config.sensor_name)
-                result_dir = runner.prepare_output_directory()
+                result_dir = runner.prepare_output_directory(
+                    config.measurement_mode
+                )
                 self.result_path_ready.emit(result_dir)
 
                 runner.set_smu(config.smu_resource)

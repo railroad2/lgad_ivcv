@@ -2,6 +2,7 @@ import os
 import re
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -128,7 +129,7 @@ class FakeIVRunner:
     def set_sensor_name(self, _name):
         pass
 
-    def prepare_output_directory(self):
+    def prepare_output_directory(self, _measurement_mode=None):
         return self.iv.get_out_dir()
 
     def set_sweep(self, *_args):
@@ -182,7 +183,7 @@ class FakeCVRunner:
     def set_sensor_name(self, _name):
         pass
 
-    def prepare_output_directory(self):
+    def prepare_output_directory(self, _measurement_mode=None):
         return self.cv.get_out_dir()
 
     def set_lcr(self, _resource):
@@ -475,6 +476,49 @@ class MainWindowTests(unittest.TestCase):
                     r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] "
                     r"Measurement completed\n$"
                 ),
+            )
+
+        window.close()
+
+    def test_completed_log_only_session_gets_logonly_suffix(self):
+        window = MainWindow()
+
+        with tempfile.TemporaryDirectory() as result_path:
+            session = Path(result_path) / "IV_ROW_session"
+            window._start_file_log(session)
+            window._measurement_completed(False, str(session))
+
+            renamed = Path(result_path) / "IV_ROW_session_logonly"
+            self.assertFalse(session.exists())
+            self.assertTrue(renamed.is_dir())
+            self.assertEqual(window._log_file_path.parent, renamed)
+            self.assertIn(
+                f"Result path: {renamed}",
+                window._log_file_path.read_text(encoding="utf-8"),
+            )
+
+        window.close()
+
+    def test_session_with_measurement_data_keeps_its_name(self):
+        window = MainWindow()
+
+        with tempfile.TemporaryDirectory() as result_path:
+            session = Path(result_path) / "CV_session"
+            window._start_cv_file_log(session)
+            (session / "CV_sensor_row00_col00_v0.txt").write_text(
+                "measurement data\n",
+                encoding="utf-8",
+            )
+
+            kept_path = window._mark_log_only_result(
+                session,
+                "_cv_log_file_path",
+            )
+
+            self.assertEqual(kept_path, str(session))
+            self.assertTrue(session.is_dir())
+            self.assertFalse(
+                (Path(result_path) / "CV_session_logonly").exists()
             )
 
         window.close()

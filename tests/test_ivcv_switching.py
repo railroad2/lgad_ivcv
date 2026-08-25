@@ -58,19 +58,26 @@ class FakeMeasurement:
 
 class SwitchingMeasurementTests(unittest.TestCase):
     def test_iv_and_cv_prepare_named_session_directories(self):
-        for runner_type, prefix, measurement_name in (
+        for runner_type, base_prefix, measurement_name in (
             (IV_sw, "IV", "iv"),
             (CV_sw, "CV", "cv"),
         ):
-            with self.subTest(runner=runner_type.__name__):
-                with tempfile.TemporaryDirectory() as result_path:
+            for mode, mode_prefix in (
+                (None, base_prefix),
+                ("channel", f"{base_prefix}_PIXEL"),
+                ("row", f"{base_prefix}_ROW"),
+                ("column", f"{base_prefix}_COL"),
+            ):
+                with self.subTest(runner=runner_type.__name__, mode=mode):
+                    result_dir = tempfile.TemporaryDirectory()
+                    self.addCleanup(result_dir.cleanup)
                     runner = runner_type(port=None, dryrun=True)
-                    runner.set_basepath(result_path)
+                    runner.set_basepath(result_dir.name)
                     runner.set_sensor_name("sensor")
 
-                    output_path = runner.prepare_output_directory()
+                    output_path = runner.prepare_output_directory(mode)
 
-                    self.assertIn(f"/{prefix}_", output_path)
+                    self.assertIn(f"/{mode_prefix}_", output_path)
                     self.assertIn("/sensor/", output_path)
                     self.assertEqual(
                         getattr(runner, measurement_name).sensor_name,

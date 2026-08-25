@@ -45,7 +45,13 @@ tabs.
 
 Each measurement session writes timestamped status messages to
 `IV_GUI_YYYY-MM-DDTHHMMSS_vN.log` or `CV_GUI_YYYY-MM-DDTHHMMSS_vN.log` in the
-same dated session directory as its data and plot files.
+same dated session directory as its data and plot files. If a finished,
+stopped, or failed session contains only log files, the GUI appends `_logonly`
+to that session directory name.
+
+Session directory names identify the measurement mode: `IV_PIXEL_...`,
+`IV_ROW_...`, and `IV_COL_...` for IV measurements, and `CV_PIXEL_...`,
+`CV_ROW_...`, and `CV_COL_...` for CV measurements.
 
 The switching matrix URI follows `IVCV_SWITCHING_MATRIX_URI` when it is set,
 otherwise it defaults to `ws://localhost:8765`. An explicit `--port` argument

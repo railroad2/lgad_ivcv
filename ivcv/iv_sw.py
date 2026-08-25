@@ -87,11 +87,19 @@ class IV_sw:
     def set_basepath(self, basepath):
         self.iv.base_path = basepath
 
-    def prepare_output_directory(self):
+    def prepare_output_directory(self, measurement_mode=None):
         """Create the IV session directory before instruments start measuring."""
         if not self.iv.get_out_dir():
+            prefixes = {
+                None: "IV",
+                "channel": "IV_PIXEL",
+                "row": "IV_ROW",
+                "column": "IV_COL",
+            }
+            if measurement_mode not in prefixes:
+                raise ValueError(f"Unknown measurement mode: {measurement_mode}")
             self.iv.set_measurement_time()
-            self.iv.prepare_output_directory(prefix="IV")
+            self.iv.prepare_output_directory(prefix=prefixes[measurement_mode])
         return self.iv.get_out_dir()
 
     def set_sweep(self, v0, v1, dv=1, return_swp=False):
@@ -151,7 +159,7 @@ class IV_sw:
         on_channel_start=None,
         on_channel_complete=None,
     ):
-        self.prepare_output_directory()
+        self.prepare_output_directory("channel")
         if isinstance(channels, Integral):
             channels = [int(channels)]
         else:
@@ -223,7 +231,7 @@ class IV_sw:
         on_row_start=None,
         on_row_complete=None,
     ):
-        self.prepare_output_directory()
+        self.prepare_output_directory("row")
 
         if rows is None or len(rows) == 0:
             rows = list(range(16))
@@ -288,7 +296,7 @@ class IV_sw:
         on_col_start=None,
         on_col_complete=None,
     ):
-        self.prepare_output_directory()
+        self.prepare_output_directory("column")
 
         if cols is None or len(cols) == 0:
             cols = list(range(16))

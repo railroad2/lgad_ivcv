@@ -90,11 +90,19 @@ class CV_sw:
     def set_basepath(self, basepath):
         self.cv.base_path = basepath
 
-    def prepare_output_directory(self):
+    def prepare_output_directory(self, measurement_mode=None):
         """Create the CV session directory before instruments start measuring."""
         if not self.cv.get_out_dir():
+            prefixes = {
+                None: "CV",
+                "channel": "CV_PIXEL",
+                "row": "CV_ROW",
+                "column": "CV_COL",
+            }
+            if measurement_mode not in prefixes:
+                raise ValueError(f"Unknown measurement mode: {measurement_mode}")
             self.cv.set_measurement_time()
-            self.cv.prepare_output_directory(prefix="CV")
+            self.cv.prepare_output_directory(prefix=prefixes[measurement_mode])
         return self.cv.get_out_dir()
 
     def set_sweep(self, v0, v1, dv=1, return_swp=False):
@@ -150,7 +158,7 @@ class CV_sw:
         on_channel_start=None,
         on_channel_complete=None,
     ):
-        self.prepare_output_directory()
+        self.prepare_output_directory("channel")
         if isinstance(channels, Integral):
             channels = [int(channels)]
         else:
@@ -204,7 +212,7 @@ class CV_sw:
         on_row_start=None,
         on_row_complete=None,
     ):
-        self.prepare_output_directory()
+        self.prepare_output_directory("row")
         rows = list(range(16)) if rows is None or len(rows) == 0 else list(rows)
 
         swm = self.swm
@@ -250,7 +258,7 @@ class CV_sw:
         on_col_start=None,
         on_col_complete=None,
     ):
-        self.prepare_output_directory()
+        self.prepare_output_directory("column")
         cols = list(range(16)) if cols is None or len(cols) == 0 else list(cols)
 
         swm = self.swm

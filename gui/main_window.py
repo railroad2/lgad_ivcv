@@ -836,6 +836,10 @@ class MainWindow(QMainWindow):
         self.cv_resistance_curve.setData(self._cv_plot_voltage, resistance)
 
     def _measurement_completed(self, stopped, result_path):
+        result_path = self._mark_log_only_result(
+            result_path,
+            "_log_file_path",
+        )
         if stopped:
             message = "Measurement stopped safely."
         else:
@@ -849,6 +853,7 @@ class MainWindow(QMainWindow):
         )
 
     def _measurement_failed(self, message):
+        self._mark_log_only_result_from_log("_log_file_path")
         self._append_log(f"Measurement failed: {message}")
         self.statusBar().showMessage(
             "Measurement failed — safe output shutdown was attempted."
@@ -860,6 +865,10 @@ class MainWindow(QMainWindow):
         )
 
     def _cv_measurement_completed(self, stopped, result_path):
+        result_path = self._mark_log_only_result(
+            result_path,
+            "_cv_log_file_path",
+        )
         message = (
             "CV measurement stopped safely."
             if stopped
@@ -870,6 +879,7 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(message)
 
     def _cv_measurement_failed(self, message):
+        self._mark_log_only_result_from_log("_cv_log_file_path")
         self._append_cv_log(f"CV measurement failed: {message}")
         self.statusBar().showMessage(
             "CV measurement failed — safe output shutdown was attempted."
@@ -944,6 +954,41 @@ class MainWindow(QMainWindow):
             if existing_log:
                 path.write_text(existing_log + "\n", encoding="utf-8")
             return path
+
+    def _mark_log_only_result_from_log(self, log_path_attribute):
+        log_path = getattr(self, log_path_attribute)
+        if log_path is None:
+            return None
+        return self._mark_log_only_result(log_path.parent, log_path_attribute)
+
+    def _mark_log_only_result(self, result_path, log_path_attribute):
+        directory = Path(result_path).expanduser()
+        log_path = getattr(self, log_path_attribute)
+        if not directory.is_dir() or log_path is None:
+            return str(directory)
+
+        entries = list(directory.iterdir())
+        if not entries or any(
+            not entry.is_file() or entry.suffix.lower() != ".log"
+            for entry in entries
+        ):
+            return str(directory)
+
+        candidate = directory.with_name(f"{directory.name}_logonly")
+        version = 1
+        while candidate.exists():
+            candidate = directory.with_name(
+                f"{directory.name}_v{version}_logonly"
+            )
+            version += 1
+
+        try:
+            directory.rename(candidate)
+        except OSError:
+            return str(directory)
+
+        setattr(self, log_path_attribute, candidate / log_path.name)
+        return str(candidate)
 
     def _set_running(self, running, active_measurement=None):
         self.start_button.setEnabled(not running)

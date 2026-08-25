@@ -1,6 +1,7 @@
 import math
 import os
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import pyqtgraph as pg
@@ -9,6 +10,7 @@ from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDockWidget,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -21,7 +23,6 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSplitter,
     QStatusBar,
     QTextEdit,
     QVBoxLayout,
@@ -55,6 +56,7 @@ class MainWindow(QMainWindow):
         self._plot_voltage = []
         self._plot_pau = []
         self._plot_smu = []
+        self._log_file_path = None
 
         self._build_ui()
         self.measurement_mode_combo.currentIndexChanged.connect(
@@ -68,18 +70,48 @@ class MainWindow(QMainWindow):
         central = QWidget()
         root = QVBoxLayout(central)
         root.addLayout(self._build_settings_row())
-
-        splitter = QSplitter(Qt.Horizontal)
-        splitter.addWidget(self._build_channel_panel())
-        splitter.addWidget(self._build_output_panel())
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 2)
-        root.addWidget(splitter, 1)
+        root.addWidget(self._build_status_log(), 1)
         root.addLayout(self._build_control_row())
 
         self.setCentralWidget(central)
         self.setStatusBar(QStatusBar())
         self.statusBar().showMessage("Ready")
+        self.setDockNestingEnabled(True)
+
+        self.channel_dock = self._create_dock(
+            "Measurement channels",
+            "measurementChannelsDock",
+            self._build_channel_panel(),
+            Qt.LeftDockWidgetArea,
+        )
+        self.live_iv_dock = self._create_dock(
+            "Live IV",
+            "liveIvDock",
+            self._build_live_iv_panel(),
+            Qt.RightDockWidgetArea,
+        )
+        self.resizeDocks(
+            [self.channel_dock, self.live_iv_dock],
+            [760, 600],
+            Qt.Horizontal,
+        )
+
+        view_menu = self.menuBar().addMenu("View")
+        view_menu.addAction(self.channel_dock.toggleViewAction())
+        view_menu.addAction(self.live_iv_dock.toggleViewAction())
+
+    def _create_dock(self, title, object_name, widget, area):
+        dock = QDockWidget(title, self)
+        dock.setObjectName(object_name)
+        dock.setAllowedAreas(Qt.AllDockWidgetAreas)
+        dock.setFeatures(
+            QDockWidget.DockWidgetClosable
+            | QDockWidget.DockWidgetMovable
+            | QDockWidget.DockWidgetFloatable
+        )
+        dock.setWidget(widget)
+        self.addDockWidget(area, dock)
+        return dock
 
     def _build_settings_row(self):
         row = QHBoxLayout()
@@ -153,8 +185,8 @@ class MainWindow(QMainWindow):
         return spin
 
     def _build_channel_panel(self):
-        self.channel_group = QGroupBox("Measurement channels")
-        layout = QVBoxLayout(self.channel_group)
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
 
         controls = QHBoxLayout()
         self.select_all_button = QPushButton("Select all")
@@ -174,7 +206,7 @@ class MainWindow(QMainWindow):
         scroll.setWidget(self.channel_grid)
         scroll.setWidgetResizable(True)
         layout.addWidget(scroll, 1)
-        return self.channel_group
+        return panel
 
     def channel_grid_select_all(self):
         self.channel_grid.select_all()
@@ -182,11 +214,9 @@ class MainWindow(QMainWindow):
     def channel_grid_clear_all(self):
         self.channel_grid.clear_all()
 
-    def _build_output_panel(self):
-        widget = QWidget()
-        layout = QVBoxLayout(widget)
-        graph_group = QGroupBox("Live IV")
-        graph_layout = QVBoxLayout(graph_group)
+    def _build_live_iv_panel(self):
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
         self.plot_widget = pg.PlotWidget()
         self.plot_widget.setLabel("bottom", "Bias voltage", units="V")
         self.plot_widget.setLabel("left", "Current", units="A")
@@ -200,19 +230,18 @@ class MainWindow(QMainWindow):
         )
         self.log_scale_check = QCheckBox("Log Y axis (absolute values)")
         self.log_scale_check.toggled.connect(self._refresh_plot)
-        graph_layout.addWidget(self.plot_widget, 1)
-        graph_layout.addWidget(self.log_scale_check)
+        layout.addWidget(self.plot_widget, 1)
+        layout.addWidget(self.log_scale_check)
+        return panel
 
+    def _build_status_log(self):
         log_group = QGroupBox("Status log")
         log_layout = QVBoxLayout(log_group)
         self.log_edit = QTextEdit()
         self.log_edit.setReadOnly(True)
         self.log_edit.document().setMaximumBlockCount(1000)
         log_layout.addWidget(self.log_edit)
-
-        layout.addWidget(graph_group, 3)
-        layout.addWidget(log_group, 2)
-        return widget
+        return log_group
 
     def _build_control_row(self):
         row = QHBoxLayout()
@@ -242,7 +271,7 @@ class MainWindow(QMainWindow):
         mode = self.measurement_mode_combo.currentData() or "channel"
         singular, plural = self.MODE_LABELS[mode]
         self.channel_grid.set_selection_mode(mode)
-        self.channel_group.setTitle(f"Measurement {plural}")
+        self.channel_dock.setWindowTitle(f"Measurement {plural}")
         self.channel_progress.setFormat(f"{singular} %v/%m")
         self._channel_selection_changed(
             len(self.channel_grid.selected_targets())
@@ -334,6 +363,7 @@ class MainWindow(QMainWindow):
         worker.target_started.connect(self._target_started)
         worker.target_completed.connect(self._target_completed)
         worker.point_measured.connect(self._point_measured)
+        worker.result_path_ready.connect(self._result_path_ready)
         worker.completed.connect(self._measurement_completed)
         worker.failed.connect(self._measurement_failed)
         worker.completed.connect(thread.quit)
@@ -349,6 +379,14 @@ class MainWindow(QMainWindow):
             f"Measurement started: {len(config.targets)} {plural}"
         )
         thread.start()
+
+    def _result_path_ready(self, result_path):
+        try:
+            self._start_file_log(result_path)
+        except OSError as exc:
+            self._append_log(f"Cannot create status log: {exc}")
+            return
+        self._append_log(f"Status log: {self._log_file_path}")
 
     def _stop_measurement(self):
         if self._worker is None:
@@ -442,7 +480,31 @@ class MainWindow(QMainWindow):
 
     def _append_log(self, message):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        self.log_edit.append(f"[{timestamp}] {message.rstrip()}")
+        entry = f"[{timestamp}] {message.rstrip()}"
+        self.log_edit.append(entry)
+        if self._log_file_path is not None:
+            with self._log_file_path.open("a", encoding="utf-8") as log_file:
+                log_file.write(entry + "\n")
+
+    def _start_file_log(self, result_path):
+        self._log_file_path = None
+        directory = Path(result_path).expanduser()
+        directory.mkdir(parents=True, exist_ok=True)
+        timestamp = datetime.now().strftime("%Y-%m-%dT%H%M%S")
+
+        version = 0
+        while True:
+            path = directory / f"IV_GUI_{timestamp}_v{version}.log"
+            try:
+                path.touch(exist_ok=False)
+            except FileExistsError:
+                version += 1
+                continue
+            self._log_file_path = path
+            existing_log = self.log_edit.toPlainText()
+            if existing_log:
+                path.write_text(existing_log + "\n", encoding="utf-8")
+            return path
 
     def _set_running(self, running):
         self.start_button.setEnabled(not running)
@@ -499,6 +561,12 @@ class MainWindow(QMainWindow):
         saved_mode = self._settings.value("iv/measurement_mode", "channel")
         mode_index = self.measurement_mode_combo.findData(saved_mode)
         self.measurement_mode_combo.setCurrentIndex(max(mode_index, 0))
+        geometry = self._settings.value("gui/geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
+        dock_state = self._settings.value("gui/dock_state")
+        if dock_state is not None:
+            self.restoreState(dock_state)
 
     def _save_settings(self):
         self._settings.setValue("iv/port", self.port_edit.text())
@@ -516,6 +584,8 @@ class MainWindow(QMainWindow):
             "iv/measurement_mode",
             self.measurement_mode_combo.currentData(),
         )
+        self._settings.setValue("gui/geometry", self.saveGeometry())
+        self._settings.setValue("gui/dock_state", self.saveState())
 
     def closeEvent(self, event: QCloseEvent):
         if self._worker is not None:

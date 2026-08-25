@@ -67,6 +67,11 @@ class Measurement:
         #self.out_dir_path = self.base_path
         mkdir(self.out_dir_path)
 
+    def prepare_output_directory(self, prefix="IV"):
+        """Create and return the directory shared by one measurement session."""
+        self._make_out_dir(prefix=prefix)
+        return self.out_dir_path
+
     def make_out_file_name(self, prefix="IV"):
         separator = ','
 

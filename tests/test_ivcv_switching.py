@@ -42,9 +42,17 @@ class FakeSwitchMatrix:
 class FakeMeasurement:
     def __init__(self):
         self.time_set = False
+        self.out_dir_path = ""
 
     def set_measurement_time(self):
         self.time_set = True
+
+    def prepare_output_directory(self, prefix="IV"):
+        self.out_dir_path = "/tmp/result/measurement"
+        return self.out_dir_path
+
+    def get_out_dir(self):
+        return self.out_dir_path
 
 
 class SwitchingMeasurementTests(unittest.TestCase):

@@ -27,9 +27,17 @@ class FakeSwitchMatrix:
 class FakeMeasurement:
     def __init__(self):
         self.event = threading.Event()
+        self.out_dir_path = ""
 
     def set_measurement_time(self):
         pass
+
+    def prepare_output_directory(self, prefix="IV"):
+        self.out_dir_path = "/tmp/result/measurement"
+        return self.out_dir_path
+
+    def get_out_dir(self):
+        return self.out_dir_path
 
 
 class IVGuiSupportTests(unittest.TestCase):

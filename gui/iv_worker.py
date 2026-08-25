@@ -33,6 +33,7 @@ class IVWorker(QObject):
     target_started = Signal(str, int, int, int)
     target_completed = Signal(str, int, int, int)
     point_measured = Signal(str, int, float, float, float, int, int)
+    result_path_ready = Signal(str)
     completed = Signal(bool, str)
     failed = Signal(str)
 
@@ -97,12 +98,15 @@ class IVWorker(QObject):
                 self._runner = runner
                 runner.iv.set_data_callback(self._point_measured)
 
+                runner.set_basepath(config.result_path)
+                runner.set_sensor_name(config.sensor_name)
+                result_dir = runner.prepare_output_directory()
+                self.result_path_ready.emit(result_dir)
+
                 runner.set_smu(config.smu_resource)
                 if self._stop_event.is_set():
                     runner.request_stop()
                 runner.set_pau(config.pau_resource)
-                runner.set_basepath(config.result_path)
-                runner.set_sensor_name(config.sensor_name)
                 runner.set_sweep(
                     config.start_voltage,
                     config.end_voltage,

@@ -86,6 +86,13 @@ class IV_sw:
     def set_basepath(self, basepath):
         self.iv.base_path = basepath
 
+    def prepare_output_directory(self):
+        """Create the IV session directory before instruments start measuring."""
+        if not self.iv.get_out_dir():
+            self.iv.set_measurement_time()
+            self.iv.prepare_output_directory(prefix="IV")
+        return self.iv.get_out_dir()
+
     def set_sweep(self, v0, v1, dv=1, return_swp=False):
         self.v0 = v0
         self.v1 = v1
@@ -143,7 +150,7 @@ class IV_sw:
         on_channel_start=None,
         on_channel_complete=None,
     ):
-        self.iv.set_measurement_time()
+        self.prepare_output_directory()
         if isinstance(channels, Integral):
             channels = [int(channels)]
         else:
@@ -215,7 +222,7 @@ class IV_sw:
         on_row_start=None,
         on_row_complete=None,
     ):
-        self.iv.set_measurement_time()
+        self.prepare_output_directory()
 
         if rows is None or len(rows) == 0:
             rows = list(range(16))
@@ -280,7 +287,7 @@ class IV_sw:
         on_col_start=None,
         on_col_complete=None,
     ):
-        self.iv.set_measurement_time()
+        self.prepare_output_directory()
 
         if cols is None or len(cols) == 0:
             cols = list(range(16))

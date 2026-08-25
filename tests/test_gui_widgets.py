@@ -1,19 +1,24 @@
 import os
+import re
+import tempfile
 import unittest
 from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import QSettings
+    from PySide6.QtWidgets import QApplication, QDockWidget
 
     from lgad_ivcv.gui.channel_grid import ChannelGrid
     from lgad_ivcv.gui.iv_worker import IVRunConfig, IVWorker
+    from lgad_ivcv.gui.main_window import MainWindow
 except ImportError:
     QApplication = None
     ChannelGrid = None
     IVRunConfig = None
     IVWorker = None
+    MainWindow = None
 
 
 @unittest.skipIf(QApplication is None, "PySide6 is not installed")
@@ -21,6 +26,9 @@ class ChannelGridTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
+        cls.app.setOrganizationName("LGAD GUI tests")
+        cls.app.setApplicationName("LGAD GUI tests")
+        QSettings().clear()
 
     def test_all_linear_channels_are_selected_initially(self):
         grid = ChannelGrid()
@@ -86,6 +94,9 @@ class FakeIVRunner:
     def set_sensor_name(self, _name):
         pass
 
+    def prepare_output_directory(self):
+        return self.iv.get_out_dir()
+
     def set_sweep(self, *_args):
         pass
 
@@ -138,8 +149,10 @@ class IVWorkerTests(unittest.TestCase):
                 worker = IVWorker(config)
                 points = []
                 completions = []
+                result_paths = []
                 worker.point_measured.connect(lambda *args: points.append(args))
                 worker.completed.connect(lambda *args: completions.append(args))
+                worker.result_path_ready.connect(result_paths.append)
 
                 with patch("lgad_ivcv.gui.iv_worker.IV_sw", FakeIVRunner):
                     worker.run()
@@ -152,6 +165,59 @@ class IVWorkerTests(unittest.TestCase):
                     completions,
                     [(False, "/tmp/result/measurement")],
                 )
+                self.assertEqual(result_paths, ["/tmp/result/measurement"])
+
+
+@unittest.skipIf(QApplication is None, "PySide6 is not installed")
+class MainWindowDockTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = QApplication.instance() or QApplication([])
+        cls.app.setOrganizationName("LGAD main window tests")
+        cls.app.setApplicationName("LGAD main window tests")
+        QSettings().clear()
+
+    def test_channel_and_plot_float_while_log_stays_in_main_window(self):
+        window = MainWindow()
+
+        self.assertIsInstance(window.channel_dock, QDockWidget)
+        self.assertIsInstance(window.live_iv_dock, QDockWidget)
+        self.assertTrue(
+            window.channel_dock.features() & QDockWidget.DockWidgetFloatable
+        )
+        self.assertTrue(
+            window.live_iv_dock.features() & QDockWidget.DockWidgetFloatable
+        )
+        self.assertIs(window.log_edit.window(), window)
+
+        window.close()
+
+    def test_status_log_is_written_under_result_path(self):
+        window = MainWindow()
+
+        with tempfile.TemporaryDirectory() as result_path:
+            window._append_log("Measurement started")
+            first_path = window._start_file_log(result_path)
+            window._append_log("Measurement completed")
+            second_path = window._start_file_log(result_path)
+
+            self.assertEqual(first_path.parent.as_posix(), result_path)
+            self.assertRegex(
+                first_path.name,
+                r"^IV_GUI_\d{4}-\d{2}-\d{2}T\d{6}_v0\.log$",
+            )
+            self.assertNotEqual(first_path, second_path)
+            self.assertRegex(
+                first_path.read_text(encoding="utf-8"),
+                re.compile(
+                    r"^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] "
+                    r"Measurement started\n"
+                    r"\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] "
+                    r"Measurement completed\n$"
+                ),
+            )
+
+        window.close()
 
 
 if __name__ == "__main__":

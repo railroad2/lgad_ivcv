@@ -215,27 +215,45 @@ class Measurement:
         # defined in each measurement
         pass
 
+    def _ensure_output_off(self):
+        """Put measurement hardware in a safe state.
+
+        Subclasses must make their best effort to set every voltage source to
+        0 V and disable its output.  Cleanup implementations must not stop
+        after the first instrument communication error.
+        """
+        pass
+
     def _measure(self):
         self.measurement_in_progress = True
-        last_voltage = 0
-        for index, voltage in enumerate(self.voltage_array):
-            self._update_measurement_array(voltage, index)
+        try:
+            last_voltage = 0
+            for index, voltage in enumerate(self.voltage_array):
+                self._update_measurement_array(voltage, index)
 
-            if self.event.is_set():  # flag in Evnet is set true, when measurement stopped by user
-                last_voltage = voltage
-                break
+                if self.event.is_set():  # flag in Event is set when measurement is stopped
+                    last_voltage = voltage
+                    break
 
-        # start "forced return sweep" if the measurement stopped by user 
-        if self.event.is_set():
-            if last_voltage < 0:  # 
+            # Start a forced return sweep if the measurement was stopped.
+            if self.event.is_set() and last_voltage < 0:
                 self._make_voltage_array(last_voltage, 0, False)
 
                 for index, voltage in enumerate(self.voltage_array):
                     self._update_measurement_array(voltage, index, True)
+        finally:
+            # This is deliberately independent of the result-saving callback:
+            # callbacks are skipped when a measurement thread raises.
+            try:
+                self._ensure_output_off()
+            except Exception as exc:
+                # Subclass cleanup is expected to handle each device action
+                # independently.  Keep this final guard so cleanup errors do
+                # not hide the original measurement failure.
+                print(f"WARNING: output safety cleanup failed: {exc}")
 
-            # self._safe_escaper()
-        self.measurement_in_progress = False
-        self.return_sweep_started = False
+            self.measurement_in_progress = False
+            self.return_sweep_started = False
 
     def get_data_point(self):
         if self.is_data_exists():

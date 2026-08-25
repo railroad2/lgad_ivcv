@@ -1,4 +1,3 @@
-import sys
 import time
 
 import numpy as np
@@ -12,6 +11,7 @@ from ..util.util   import parse_voltage_steps
 
 
 CURRENT_COMPLIANCE = 10e-6
+LCR_MEASUREMENT_ATTEMPTS = 10
 DEBUG=1
 
 
@@ -130,17 +130,33 @@ class CVMeasurement(Measurement):
     def _safe_escaper(self):
         print("User interrupt... Turning off the output ...")
 
-        self.pau.set_voltage(0)
-        self.pau.set_output('OFF')
-        self.pau.close()
-
-        self.lcr.set_output('OFF')
-        self.lcr.set_dc_voltage(0)
-        self.lcr.close()
+        self._ensure_output_off()
 
         self.resources_closed = True
         print("WARNING: Please make sure the output is turned off!")
         # exit(1)
+
+    def _ensure_output_off(self):
+        """Best-effort CV shutdown for both possible bias sources."""
+        actions = []
+
+        if self.pau is not None:
+            actions.extend((
+                ("set PAU to 0 V", lambda: self.pau.set_voltage(0)),
+                ("turn PAU output off", lambda: self.pau.set_output('OFF')),
+            ))
+
+        if self.lcr is not None:
+            actions.extend((
+                ("set LCR bias to 0 V", lambda: self.lcr.set_dc_voltage(0)),
+                ("turn LCR bias output off", lambda: self.lcr.set_output('OFF')),
+            ))
+
+        for description, action in actions:
+            try:
+                action()
+            except Exception as exc:
+                print(f"WARNING: failed to {description}: {exc}")
 
     def _update_measurement_array(self, voltage, index, is_forced_return=False):
         if voltage > 0:
@@ -153,8 +169,7 @@ class CVMeasurement(Measurement):
             try:
                 current_pau, stat_pau, voltage_pau = self.pau.read_autorange().split(',')
             except Exception as exception:
-                print(type(exception).__name__)
-                sys.exit(0)
+                raise RuntimeError("Failed to read picoammeter") from exception
 
             voltage_pau = float(voltage_pau)
             current_pau = float(current_pau[:-1])
@@ -164,28 +179,33 @@ class CVMeasurement(Measurement):
             voltage_out = voltage
             current_pau = 0
 
-        #_ = self.lcr.measure()
         capacitance = -1e-30
         resistance = -1e-30
+        last_exception = None
 
-        res = self.lcr.measure()
-        capacitance, resistance = res
-        capacitance = float(capacitance)
-        resistance = float(resistance)
-        print (voltage_out, capacitance, resistance)
-
-        while capacitance == -1e-30 and resistance == -1e-30:
+        for attempt in range(LCR_MEASUREMENT_ATTEMPTS):
             try:
-                time.sleep(0.1)
                 res = self.lcr.measure()
                 capacitance, resistance = res
-
                 capacitance = float(capacitance)
                 resistance = float(resistance)
-                print (voltage_out, capacitance, resistance)
-
             except Exception as exception:
-                print("error in _measure()", type(exception).__name__)
+                last_exception = exception
+            else:
+                print(voltage_out, capacitance, resistance)
+                if capacitance != -1e-30 or resistance != -1e-30:
+                    break
+
+            if attempt + 1 < LCR_MEASUREMENT_ATTEMPTS:
+                time.sleep(0.1)
+        else:
+            message = (
+                "LCR measurement failed after "
+                f"{LCR_MEASUREMENT_ATTEMPTS} attempts"
+            )
+            if last_exception is not None:
+                raise RuntimeError(message) from last_exception
+            raise RuntimeError(message)
 
         # print(voltage_pau, capacitance, resistance, current_pau)
         self.measurement_arr.append([voltage_out, capacitance, resistance, current_pau])
@@ -193,32 +213,34 @@ class CVMeasurement(Measurement):
         self.set_status_str(index, is_forced_return)
 
     def start_measurement(self):
-        self._make_voltage_array(self.initial_voltage, self.final_voltage)
+        try:
+            self._make_voltage_array(self.initial_voltage, self.final_voltage)
 
-        self.lcr.set_dc_voltage(0)
-        self.lcr.set_level(self.ac_level)
-        self.lcr.set_freq(self.frequency)
+            self.lcr.set_dc_voltage(0)
+            self.lcr.set_level(self.ac_level)
+            self.lcr.set_freq(self.frequency)
 
-        if self.pau:
-            self.pau.set_current_limit(CURRENT_COMPLIANCE)
-            self.pau.set_voltage(0)
-            self.pau.set_output('ON')
-        else:
-            self.lcr.set_output('ON') 
+            if self.pau:
+                self.pau.set_current_limit(CURRENT_COMPLIANCE)
+                self.pau.set_voltage(0)
+                self.pau.set_output('ON')
+            else:
+                self.lcr.set_output('ON')
 
-        time.sleep(1)
+            time.sleep(1)
 
-        self.event.clear()
-        # do measurement in a thread, when finished save_results method called as callback
-        self.measurement_thread = BaseThread(target=self._measure,
-                                             callback=self.save_results)
-        self.measurement_thread.start()
+            self.event.clear()
+            # do measurement in a thread, when finished save_results method called as callback
+            self.measurement_thread = BaseThread(target=self._measure,
+                                                 callback=self.save_results)
+            self.measurement_thread.start()
+        except BaseException:
+            self._ensure_output_off()
+            raise
 
     def stop_measurement(self):
         self.event.set()
-        # self.measurement_thread.join()
-        self.lcr.set_dc_voltage(0)
-        self.lcr.set_output('OFF') 
+        self._ensure_output_off()
 
     def save_cv_plot(self, out_file_name):
         measurement_arr_trans = np.array(self.measurement_arr).T
@@ -260,10 +282,6 @@ class CVMeasurement(Measurement):
             print(f"   * Bias sweep of {self.n_measurement_points} meas "
                   f"between {self.initial_voltage} and {self.final_voltage} ")
             print(f"   * Return sweep: {self.return_sweep}")
-            self.lcr.set_dc_voltage(0)
-            time.sleep(0.1)
-            self.lcr.set_output('OFF')
-
             #if self.pau:
             #    self.pau.set_output('OFF')
             #    self.pau.close()
@@ -283,5 +301,3 @@ class CVMeasurement(Measurement):
 
             np.savetxt(out_file_name + '.txt', self.measurement_arr, header=self.out_txt_header)
             self.save_cv_plot(out_file_name + '.png')
-
-

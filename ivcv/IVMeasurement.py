@@ -116,14 +116,30 @@ class IVMeasurement(Measurement):
 
     def _safe_escaper(self):
         print("User interrupt...")
-        self.smu.set_voltage(0)
-        self.smu.set_output('off')
+        self._ensure_output_off()
         #self.smu.close()
         #if (self.pau):
         #    self.pau.close()
         self.resources_closed = True
         print("WARNING: Please make sure the output is turned off!")
         # exit(1)
+
+    def _ensure_output_off(self):
+        """Best-effort IV shutdown: return to 0 V and disable SMU output."""
+        if self.smu is None:
+            return
+
+        actions = (
+            ("ramp SMU to 0 V", lambda: self.smu.set_voltage_ramp(0)),
+            ("set SMU directly to 0 V", lambda: self.smu.set_voltage(0)),
+            ("turn SMU output off", lambda: self.smu.set_output('off')),
+        )
+
+        for description, action in actions:
+            try:
+                action()
+            except Exception as exc:
+                print(f"WARNING: failed to {description}: {exc}")
 
     def _update_measurement_array(self, voltage, index, is_forced_return=False, verbose=0):
         self.smu.set_voltage(voltage)
@@ -147,35 +163,31 @@ class IVMeasurement(Measurement):
 
 
     def start_measurement(self):
-        self._make_voltage_array(self.initial_voltage, self.final_voltage)
+        try:
+            self._make_voltage_array(self.initial_voltage, self.final_voltage)
 
-        # print(self.voltage_array)
-        self.smu.set_current_limit(self.current_compliance)
-        time.sleep(0.5)
+            self.smu.set_current_limit(self.current_compliance)
+            time.sleep(0.5)
 
-        self.smu.set_voltage(0)
-        self.smu.set_output('on')
+            self.smu.set_voltage(0)
+            self.smu.set_output('on')
 
-        time.sleep(1)
+            time.sleep(1)
 
-        self.event.clear()
-        self.measurement_thread = BaseThread(target=self._measure,
-                                             callback=self.save_results)
-        self.measurement_thread.start()
+            self.event.clear()
+            self.measurement_thread = BaseThread(target=self._measure,
+                                                 callback=self.save_results)
+            self.measurement_thread.start()
+        except BaseException:
+            self._ensure_output_off()
+            raise
 
     def stop_measurement(self):
         self.event.set()  # set internal flag as true
-        #self.measurement_thread.join()
-        self.smu.close()
-        self.smu = None
-        self.pau.close()
-        self.pau = None
+        self._ensure_output_off()
 
     def save_results(self):
         if self.resources_closed is False:
-            self.smu.set_voltage_ramp(0)
-            self.smu.set_output('off')
-
             #self.smu.close()
             #if (self.pau):
             #    self.pau.close()
@@ -187,4 +199,3 @@ class IVMeasurement(Measurement):
 
             np.savetxt(out_file_name + '.txt', self.measurement_arr, header=self.out_txt_header)
             self.save_as_plot(out_file_name + '.png')
-

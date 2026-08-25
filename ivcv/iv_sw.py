@@ -103,6 +103,7 @@ class IV_sw():
         iv.initialize_measurement(self.smu, self.pau, self.sname)
         iv.set_measurement_options(v0, v1, dv, Icomp, return_swp, col, row, rt_plot)
         iv.start_measurement()
+
         iv.measurement_thread.join()
 
     def measure_coord(self, coords, verbose=1):

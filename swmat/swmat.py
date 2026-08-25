@@ -106,8 +106,8 @@ class SWmat():
         self.off_coords([(row, col) for row in range(16)])
 
     def off_all(self):
-        stat = self.pinstat_all()
-        for i in range(16):
-            for j in range(16):
-                if stat[i][j]:
-                    self.off(i, j)
+        recv = self.comm.send_data(f"ALLOFF")
+        if recv is not None:
+            print(recv)
+        time.sleep(self.delay)
+

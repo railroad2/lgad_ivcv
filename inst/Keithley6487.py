@@ -70,6 +70,11 @@ class Keithley6487(InstBase):
         self.sleep()
         return
 
+    def set_rate(self, nplc):
+        self.write(f"SENS:CURR:NPLC {nplc}")
+        self.sleep()
+        return
+
     def set_current_range(self, I):
         self.write(f"CURR:RANGE {I}")
         self.current_range = I

@@ -50,7 +50,7 @@ def main():
     parser.add_argument('--lcr',        required=False, default=None,   help="LCR meter resource")
     parser.add_argument('--pau',        required=False, default=None,   help="PAU resource")
 
-    parser.add_argument('-p', '--port', required=False, default='ws://localhost:3001', help="Switching matrix port")
+    parser.add_argument('-p', '--port', required=False, default='ws://210.119.41.69:8765', help="Switching matrix port")
 
     args = parser.parse_args()
 

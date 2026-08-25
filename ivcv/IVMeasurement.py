@@ -47,8 +47,10 @@ class IVMeasurement(Measurement):
         self.data_points = -1
         #self._make_out_dir()
 
-        self.set_smu(smu_visa_resource)
-        self.set_pau(pau_visa_resource)
+        if self.smu is None:
+            self.set_smu(smu_visa_resource)
+        if self.pau is None:
+            self.set_pau(pau_visa_resource)
 
         if self.smu is not None:
             self.resources_closed = False
@@ -97,8 +99,8 @@ class IVMeasurement(Measurement):
         self.initial_voltage = initial_voltage
         self.final_voltage = final_voltage
 
-        if self.initial_voltage > 0 or self.final_voltage > 0:
-            raise Exception('Positive voltages not allowed.')
+        #if self.initial_voltage > 0 or self.final_voltage > 0:
+        #    raise Exception('Positive voltages not allowed.')
 
         if isinstance(voltage_step, (int, float)):
             self.voltage_step = voltage_step
@@ -163,7 +165,11 @@ class IVMeasurement(Measurement):
 
     def stop_measurement(self):
         self.event.set()  # set internal flag as true
-        self.measurement_thread.join()
+        #self.measurement_thread.join()
+        self.smu.close()
+        self.smu = None
+        self.pau.close()
+        self.pau = None
 
     def save_results(self):
         if self.resources_closed is False:

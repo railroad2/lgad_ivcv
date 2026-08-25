@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import sys
 import argparse
-import json
 import asyncio
 
 from os.path import join, split
@@ -15,9 +14,7 @@ def pinstat_usb(ch=None, frame=True, color=True):
     usbtools.pinstat(ch, frame, color, port=port)
 
 async def pinstat_ws(ch=None, frame=True, color=True):
-    payload = {"cmd":"get"}
-    pins = await wstools.send_data_once(json.dumps(payload))
-    wstools.print_with_frame(pins, ch, frame, color) 
+    await wstools.pinstat(ch, frame, color)
 
 def main():
     parser = argparse.ArgumentParser()

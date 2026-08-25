@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+
+from collections.abc import Iterable
+from typing import Optional, Union
+
+if __package__:
+    from .gatecomm import GateComm
+    from .print_utils import print_with_frame
+else:
+    from gatecomm import GateComm
+    from print_utils import print_with_frame
+
+
+DEFAULT_URI = "ws://localhost:8765"
+ChannelInput = Union[str, int, Iterable[Union[str, int]]]
+
+
+def _channels(value: ChannelInput):
+    if isinstance(value, (str, int)):
+        return [value]
+    return list(value)
+
+
+def sw_onoff(ch: ChannelInput, onoff, uri: Optional[str] = None):
+    channels = _channels(ch)
+
+    with GateComm(uri or DEFAULT_URI) as comm:
+        if onoff:
+            return comm.on(channels)
+
+        if len(channels) == 1 and str(channels[0]).lower() == "all":
+            return comm.off_all()
+
+        return comm.off(channels)
+
+
+def sw_on(ch: ChannelInput, uri: Optional[str] = None):
+    return sw_onoff(ch, True, uri=uri)
+
+
+def sw_off(ch: ChannelInput, uri: Optional[str] = None):
+    return sw_onoff(ch, False, uri=uri)
+
+
+def off_all(uri: Optional[str] = None):
+    with GateComm(uri or DEFAULT_URI) as comm:
+        return comm.off_all()
+
+
+def route(ch, uri: Optional[str] = None):
+    with GateComm(uri or DEFAULT_URI) as comm:
+        return comm.route(ch)
+
+
+def pinstat(ch=None, frame=True, color=True, uri: Optional[str] = None):
+    with GateComm(uri or DEFAULT_URI) as comm:
+        response = comm.pinstat("ALL")
+
+    pins = [int(value) for value in response["pins"]]
+
+    try:
+        print_with_frame(pins, ch, frame, color)
+    except TypeError:
+        print_with_frame(pins)
+
+    return pins
+
+
+def ping(uri: Optional[str] = None):
+    with GateComm(uri or DEFAULT_URI) as comm:
+        return comm.ping()
+
+
+def pcfstat(which="ALL", uri: Optional[str] = None):
+    with GateComm(uri or DEFAULT_URI) as comm:
+        return comm.pcfstat(which)

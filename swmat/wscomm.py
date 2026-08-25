@@ -1,63 +1,69 @@
-import sys
 import asyncio
 import json
+
 import websockets
 
+
+try:
+    from .protocol import normalize_command, validate_response
+except ImportError:
+    from protocol import normalize_command, validate_response
+
+
 class WSComm:
+    """Synchronous facade over a one-request WebSocket JSON transport."""
+
     debug = False
 
-    def __init__(self, uri=None):
+    def __init__(self, uri=None, timeout=5.0):
         self.uri = uri
+        self.timeout = timeout
+
+    def connect(self):
+        # Connections are opened per request by send_data_once().
+        return None
+
+    def close(self):
+        return None
+
+    def is_connected(self):
+        return self.uri is not None
 
     def send_data(self, data):
-        cmd, ch = data.split()
+        return asyncio.run(self.send_data_once(data))
 
-        if cmd.lower() == "on":
-            data1 = {'cmd':'set', 'ch':int(ch), "val":True}
-        elif cmd.lower() == "off":
-            data1 = {'cmd':'set', 'ch':int(ch), "val":False}
-        elif cmd.lower() == "pinstat":
-            data1 = {'cmd':'get'}
-        else:
-            print (f'Invalid command {data}', file=sys.stderr)
-            return
-
-        if data1['cmd'] == 'get':
-            response = asyncio.run(self.send_data_once(data1))
-            responsed = json.loads(response)
-
-            if 'pins' in responsed.keys():
-                return self._conv_pinstat(responsed['pins'])
-            else:
-                return response
-        else:
-            response = asyncio.run(self.send_data_once(data1))
-            return response
-
-    async def send_data_once(self, data, timeout=3, reply=None):
-        if isinstance(data, dict):
-            text = json.dumps(data)
-            if reply is None:
-                reply = (str(data.get("cmd", "")).lower() == "get")
-        else:
-            text = data
-            if reply is None:
-                reply = ("get" in text.lower())
+    async def send_data_once(self, data):
+        command = normalize_command(data)
+        text = json.dumps(command, separators=(",", ":"))
 
         if self.debug:
-            print (text)
+            print(text)
 
-        async with websockets.connect(self.uri, ping_interval=None, open_timeout=timeout) as ws:
-            try:
-                await asyncio.wait_for(ws.send(text), timeout=timeout)
-                if reply:
-                    response = await asyncio.wait_for(ws.recv(), timeout=timeout)
-                    return response
-                return None
-            except asyncio.TimeoutError:
-                return "Timeout: no response from the websocket"
+        async with websockets.connect(
+            self.uri,
+            ping_interval=None,
+            open_timeout=self.timeout,
+        ) as ws:
+            await asyncio.wait_for(ws.send(text), timeout=self.timeout)
+            message = await asyncio.wait_for(ws.recv(), timeout=self.timeout)
 
-    def _conv_pinstat(self, datain):
-        pinstat = [str(int(i)) for i in datain]
-        return ' '.join(pinstat)
+        try:
+            response = json.loads(message)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError(
+                f"WebSocket returned invalid JSON: {message!r}"
+            ) from exc
 
+        return validate_response(response, command["cmd"])
+
+    def on(self, pins):
+        return self.send_data({"cmd": "ON", "pins": pins})
+
+    def off(self, pins):
+        return self.send_data({"cmd": "OFF", "pins": pins})
+
+    def alloff(self):
+        return self.send_data({"cmd": "ALLOFF"})
+
+    def pinstat(self, which="ALL"):
+        return self.send_data({"cmd": "PINSTAT", "which": which})

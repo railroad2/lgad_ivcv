@@ -1,72 +1,67 @@
 #!/usr/bin/env python3
-import os
-import sys
-import time
-import json 
-import websockets
-import asyncio
+from swm_ctrl.websocket_client import parse_pin_tokens
+
 try:
-    from print_utils import print_with_frame
-except ModuleNotFoundError:
     from .print_utils import print_with_frame
+    from .wscomm import WSComm
+except ImportError:
+    from print_utils import print_with_frame
+    from wscomm import WSComm
 
 uri = 'ws://localhost:3001'
 timeout = 5
 
-delay=1
+def _row_pins(row):
+    if isinstance(row, int):
+        if not 0 <= row <= 15:
+            raise ValueError(f"Row out of range: {row}")
+        row = chr(ord("A") + row)
+
+    return parse_pin_tokens(("row", str(row).strip().upper()))
+
+
+def _col_pins(col):
+    return parse_pin_tokens(("col", str(col).strip()))
 
 def conv_pinstat(datain):
-    pinstat = [int(i) for i in datain]
-    return pinstat
+    return [int(i) for i in datain]
 
 
 async def send_data_once(data):
-    async with websockets.connect(uri, ping_interval=None, open_timeout=timeout) as ws:
-        await asyncio.wait_for(ws.send(data), timeout=timeout)
-        await asyncio.sleep(0.1)
-        response = await asyncio.wait_for(ws.recv(), timeout=timeout)
-
-    responsed = json.loads(response)['pins']
-    
-    pins = conv_pinstat(responsed)
-    
-    return pins
+    return await WSComm(uri=uri, timeout=timeout).send_data_once(data)
 
 
 async def sw_onoff(ch, onoff):
-    val = True if onoff else False
+    if isinstance(ch, str) and ch.strip().lower() == "all":
+        if onoff:
+            raise ValueError("Turning all pins on is not supported")
+        command = {"cmd": "ALLOFF"}
+    else:
+        tokens = (ch,) if isinstance(ch, (str, int)) else tuple(ch)
+        pins = parse_pin_tokens(tokens)
+        command = {"cmd": "ON" if onoff else "OFF", "pins": pins}
 
-    payload = {"cmd":"get"}
-    res = await send_data_once(json.dumps(payload))
-
-    for c in ch:
-        payload = {"cmd":"set", "ch":c, "val":val}
-        res = await send_data_once(json.dumps(payload))
-        time.sleep(0.1)
-
-
-async def sw_onoff_new(ch, onoff):
-    val = True if onoff else False
-
-    payload = {"cmd":"PINSTAT", "which":"all"}
-    res = await send_data_once(json.dumps(payload))
-
-    for c in ch:
-        payload = {"cmd":"set", "ch":c, "val":val}
-        res = await send_data_once(json.dumps(payload))
-        time.sleep(0.1)
+    return await send_data_once(command)
 
 
-async def pinstat(ch, frame=True, color=True):
-    payload = {"cmd":"get"}
-    res = await send_data_once(json.dumps(payload))
-    time.sleep(0.1)
-    print_with_frame(res)
+async def on_row(row):
+    return await sw_onoff(_row_pins(row), True)
 
 
-async def pinstat_new(ch, frame=True, color=True):
-    payload = {"cmd":"get"}
-    res = await send_data_once(json.dumps(payload))
-    time.sleep(0.1)
-    print_with_frame(res)
+async def off_row(row):
+    return await sw_onoff(_row_pins(row), False)
 
+
+async def on_col(col):
+    return await sw_onoff(_col_pins(col), True)
+
+
+async def off_col(col):
+    return await sw_onoff(_col_pins(col), False)
+
+
+async def pinstat(ch=None, frame=True, color=True):
+    response = await send_data_once({"cmd": "PINSTAT", "which": "ALL"})
+    pins = conv_pinstat(response["pins"])
+    print_with_frame(pins, ch, frame, color)
+    return pins

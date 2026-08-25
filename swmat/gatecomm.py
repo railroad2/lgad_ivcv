@@ -1,6 +1,8 @@
 from collections.abc import Iterable
 from typing import Optional, Union
 
+from .protocol import col_pins, row_pins
+
 try:
     from swm_ctrl.websocket_client import (
         PinInput,
@@ -48,40 +50,17 @@ class GateComm(WebSocketClientSync):
     def off(self, pins: PinCollection):
         return super().off(*self._pin_args(pins))
 
-    @staticmethod
-    def _row_label(row: Union[int, str]) -> str:
-        if isinstance(row, int):
-            if not 0 <= row <= 15:
-                raise ValueError(f"Row out of range: {row}")
-            return chr(ord("A") + row)
-
-        label = str(row).strip().upper()
-        if len(label) != 1 or not "A" <= label <= "P":
-            raise ValueError(f"Invalid row label: {row}")
-        return label
-
     def on_row(self, row: Union[int, str]):
-        return super().on("row", self._row_label(row))
+        return self.on(row_pins(row))
 
     def off_row(self, row: Union[int, str]):
-        return super().off("row", self._row_label(row))
-
-    @staticmethod
-    def _column_value(col: Union[int, str]) -> str:
-        try:
-            value = int(str(col).strip())
-        except ValueError as exc:
-            raise ValueError(f"Invalid column: {col}") from exc
-
-        if not 0 <= value <= 15:
-            raise ValueError(f"Column out of range: {value}")
-        return str(value)
+        return self.off(row_pins(row))
 
     def on_col(self, col: Union[int, str]):
-        return super().on("col", self._column_value(col))
+        return self.on(col_pins(col))
 
     def off_col(self, col: Union[int, str]):
-        return super().off("col", self._column_value(col))
+        return self.off(col_pins(col))
 
     def off_all(self):
         return super().alloff()

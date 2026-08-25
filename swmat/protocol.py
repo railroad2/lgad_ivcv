@@ -16,6 +16,21 @@ def _pin_tokens(value):
     return tuple(value)
 
 
+def row_pins(row):
+    """Expand a numeric or A..P row into its 16 linear pin indices."""
+    if isinstance(row, int):
+        if not 0 <= row <= 15:
+            raise ValueError(f"row out of range: {row}")
+        row = chr(ord("A") + row)
+
+    return parse_pin_tokens(("row", str(row).strip().upper()))
+
+
+def col_pins(col):
+    """Expand a numeric column into its 16 linear pin indices."""
+    return parse_pin_tokens(("col", str(col).strip()))
+
+
 def normalize_command(data):
     """Return one canonical Pico JSON command from a dict or legacy text."""
     if isinstance(data, dict):

@@ -3,25 +3,15 @@ from swm_ctrl.websocket_client import parse_pin_tokens
 
 try:
     from .print_utils import print_with_frame
+    from .protocol import col_pins, row_pins
     from .wscomm import WSComm
 except ImportError:
     from print_utils import print_with_frame
+    from protocol import col_pins, row_pins
     from wscomm import WSComm
 
 uri = 'ws://localhost:3001'
 timeout = 5
-
-def _row_pins(row):
-    if isinstance(row, int):
-        if not 0 <= row <= 15:
-            raise ValueError(f"Row out of range: {row}")
-        row = chr(ord("A") + row)
-
-    return parse_pin_tokens(("row", str(row).strip().upper()))
-
-
-def _col_pins(col):
-    return parse_pin_tokens(("col", str(col).strip()))
 
 def conv_pinstat(datain):
     return [int(i) for i in datain]
@@ -45,19 +35,19 @@ async def sw_onoff(ch, onoff):
 
 
 async def on_row(row):
-    return await sw_onoff(_row_pins(row), True)
+    return await sw_onoff(row_pins(row), True)
 
 
 async def off_row(row):
-    return await sw_onoff(_row_pins(row), False)
+    return await sw_onoff(row_pins(row), False)
 
 
 async def on_col(col):
-    return await sw_onoff(_col_pins(col), True)
+    return await sw_onoff(col_pins(col), True)
 
 
 async def off_col(col):
-    return await sw_onoff(_col_pins(col), False)
+    return await sw_onoff(col_pins(col), False)
 
 
 async def pinstat(ch=None, frame=True, color=True):

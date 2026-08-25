@@ -7,6 +7,7 @@ from swm_ctrl.websocket_client import parse_pin_tokens, row_col_to_pin
 from . import wscomm
 from . import usbcomm
 from . import gatecomm
+from .protocol import col_pins, row_pins
 
 
 class SWmat:
@@ -68,18 +69,6 @@ class SWmat:
         tokens = (pins,) if isinstance(pins, (str, int)) else tuple(pins)
         return parse_pin_tokens(tokens)
 
-    @staticmethod
-    def _row_pins(row):
-        if isinstance(row, int):
-            if not 0 <= row <= 15:
-                raise ValueError(f"row out of range: {row}")
-            row = chr(ord("A") + row)
-        return parse_pin_tokens(("row", str(row).strip().upper()))
-
-    @staticmethod
-    def _col_pins(col):
-        return parse_pin_tokens(("col", str(col).strip()))
-
     def pinstat_all(self):
         response = self._require_comm().pinstat("ALL")
         pins = response.get("pins")
@@ -96,16 +85,16 @@ class SWmat:
         return self._execute("off", self._pins(pins, col))
 
     def on_row(self, row):
-        return self._execute("on", self._row_pins(row))
+        return self._execute("on", row_pins(row))
 
     def off_row(self, row):
-        return self._execute("off", self._row_pins(row))
+        return self._execute("off", row_pins(row))
 
     def on_col(self, col):
-        return self._execute("on", self._col_pins(col))
+        return self._execute("on", col_pins(col))
 
     def off_col(self, col):
-        return self._execute("off", self._col_pins(col))
+        return self._execute("off", col_pins(col))
 
     def off_all(self):
         return self._execute("alloff")

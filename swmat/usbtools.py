@@ -4,9 +4,11 @@ from swm_ctrl.websocket_client import parse_pin_tokens
 
 try:
     from .print_utils import print_with_frame
+    from .protocol import col_pins, row_pins
     from .usbcomm import USBComm
 except ImportError:
     from print_utils import print_with_frame
+    from protocol import col_pins, row_pins
     from usbcomm import USBComm
     
 
@@ -34,19 +36,6 @@ def send_line(line, port=None):
     return _send_json_command(line, port=port)
 
 
-def _row_pins(row):
-    if isinstance(row, int):
-        if not 0 <= row <= 15:
-            raise ValueError(f"Row out of range: {row}")
-        row = chr(ord("A") + row)
-
-    return parse_pin_tokens(("row", str(row).strip().upper()))
-
-
-def _col_pins(col):
-    return parse_pin_tokens(("col", str(col).strip()))
-
-
 def _send_json_command(cmd, port=None):
     if port is None:
         ports = find_pico_ports()
@@ -71,19 +60,19 @@ def sw_onoff(ch, onoff, port=None):
 
 
 def on_row(row, port=None):
-    return sw_onoff(_row_pins(row), True, port=port)
+    return sw_onoff(row_pins(row), True, port=port)
 
 
 def off_row(row, port=None):
-    return sw_onoff(_row_pins(row), False, port=port)
+    return sw_onoff(row_pins(row), False, port=port)
 
 
 def on_col(col, port=None):
-    return sw_onoff(_col_pins(col), True, port=port)
+    return sw_onoff(col_pins(col), True, port=port)
 
 
 def off_col(col, port=None):
-    return sw_onoff(_col_pins(col), False, port=port)
+    return sw_onoff(col_pins(col), False, port=port)
 
 
 def pinstat(ch=None, frame=True, color=True, port=None):

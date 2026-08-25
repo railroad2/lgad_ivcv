@@ -4,7 +4,12 @@ import unittest
 from unittest.mock import AsyncMock, patch
 
 from swmat import usbtools, wstools
-from swmat.protocol import SwitchProtocolError, normalize_command
+from swmat.protocol import (
+    SwitchProtocolError,
+    col_pins,
+    normalize_command,
+    row_pins,
+)
 from swmat.swmat import SWmat
 from swmat.usbcomm import USBComm
 from swmat.wscomm import WSComm
@@ -65,6 +70,11 @@ class ProtocolTests(unittest.TestCase):
             normalize_command('{"cmd":"pinstat","which":"all"}'),
             {"cmd": "PINSTAT", "which": "ALL"},
         )
+
+    def test_expands_rows_and_columns_in_one_shared_place(self):
+        self.assertEqual(row_pins(1), list(range(16, 32)))
+        self.assertEqual(row_pins("P"), list(range(240, 256)))
+        self.assertEqual(col_pins(3), list(range(3, 256, 16)))
 
     def test_usb_uses_common_json_and_skips_ready_message(self):
         fake = FakeSerial([

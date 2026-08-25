@@ -30,7 +30,7 @@ def main():
     parser.add_argument('--Vend', type=float, default=-10, help="End voltage")
     parser.add_argument('--Vstep', type=float, default=1, help="Voltage step")
     parser.add_argument('--sensorname', default='test', help="Sensor name")
-    parser.add_argument('--basepath', default='../../result/', help="Base path for result output")
+    parser.add_argument('--basepath', default='./result', help="Base path for result output")
     parser.add_argument('--return_swp', action="store_true", help="Return sweep")
     parser.add_argument('--dryrun', action="store_true", help="Dry run with only switching matrix operation")
     parser.add_argument('--lcr', default=None, help="LCR meter resource")

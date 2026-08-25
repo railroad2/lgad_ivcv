@@ -3,16 +3,22 @@ import threading
 from numbers import Integral
 
 from .IVMeasurement import IVMeasurement
+from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
 from ..inst import Keithley2400, Keithley6487
 from ..util.util import rowcol2nch
 
 
+_DEFAULT_PORT = object()
+
+
 class IV_sw:
 
-    def __init__(self, port=None, dryrun=False):
-        self.port = port or 'ws://localhost:8765'
+    def __init__(self, port=_DEFAULT_PORT, dryrun=False):
+        if port is _DEFAULT_PORT:
+            port = resolve_switching_matrix_uri()
+        self.port = port
         self.swm = SWmat(port)
         self.iv = IVMeasurement()
         self.smu = Keithley2400()

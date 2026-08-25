@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -11,6 +12,7 @@ from swmat.protocol import (
     row_pins,
 )
 from swmat.swmat import SWmat
+from swmat.gatecomm import GateComm
 from swmat.usbcomm import USBComm
 from swmat.wscomm import WSComm
 
@@ -75,6 +77,17 @@ class ProtocolTests(unittest.TestCase):
         self.assertEqual(row_pins(1), list(range(16, 32)))
         self.assertEqual(row_pins("P"), list(range(240, 256)))
         self.assertEqual(col_pins(3), list(range(3, 256, 16)))
+
+    def test_gatecomm_uses_environment_then_localhost_default(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(GateComm().uri, "ws://localhost:8765")
+
+        with patch.dict(
+            os.environ,
+            {"IVCV_SWITCHING_MATRIX_URI": "ws://matrix:8765"},
+        ):
+            self.assertEqual(GateComm().uri, "ws://matrix:8765")
+            self.assertEqual(GateComm("ws://explicit:8765").uri, "ws://explicit:8765")
 
     def test_usb_uses_common_json_and_skips_ready_message(self):
         fake = FakeSerial([

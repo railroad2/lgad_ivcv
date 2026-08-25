@@ -1,6 +1,6 @@
 import argparse
 
-from lgad_ivcv.ivcv.config import resolve_result_path
+from lgad_ivcv.ivcv.config import resolve_result_path, resolve_switching_matrix_uri
 from lgad_ivcv.ivcv.cv_sw import CV_sw
 
 
@@ -69,13 +69,13 @@ def main():
     parser.add_argument(
         "-p",
         "--port",
-        default="ws://210.119.41.69:8765",
-        help="Switching matrix port",
+        default=None,
+        help="Switching matrix port (default: IVCV_SWITCHING_MATRIX_URI or ws://localhost:8765)",
     )
     args = parser.parse_args()
 
     measure_selected(
-        args.port,
+        resolve_switching_matrix_uri(args.port),
         args.Vstart,
         args.Vend,
         args.Vstep,

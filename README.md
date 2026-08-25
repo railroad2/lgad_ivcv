@@ -20,3 +20,7 @@ The GUI provides the options of `scripts/iv_all.py`, a 16 by 16 linear-channel
 selector, live PAU/SMU plots, per-channel and sweep progress, and safe
 measurement cancellation. The initial result directory follows
 `IVCV_RESULT_PATH` when it is set, otherwise it is `./result`.
+
+The switching matrix URI follows `IVCV_SWITCHING_MATRIX_URI` when it is set,
+otherwise it defaults to `ws://localhost:8765`. An explicit `--port` argument
+overrides the environment setting in command-line scripts.

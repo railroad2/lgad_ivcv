@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 try:
@@ -22,8 +23,15 @@ class GateComm(WebSocketClientSync):
         # The gateway assigns roles by port:
         #   8765 -> control, 8766 -> monitor
         # No URL path rewriting is needed here.
+        resolved_uri = uri
+        if resolved_uri is None:
+            resolved_uri = os.environ.get(
+                "IVCV_SWITCHING_MATRIX_URI",
+                "ws://localhost:8765",
+            )
+
         super().__init__(
-            uri or "ws://localhost:8765",
+            resolved_uri,
             timeout=timeout,
             connect_timeout=connect_timeout,
         )

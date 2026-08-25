@@ -1,7 +1,7 @@
 import argparse
 
 from lgad_ivcv.ivcv.cv_sw import CV_sw
-from lgad_ivcv.ivcv.config import resolve_result_path
+from lgad_ivcv.ivcv.config import resolve_result_path, resolve_switching_matrix_uri
 
 def measure_all(smport, v0, v1, dv,
                 resultpath, sensor_name,
@@ -36,12 +36,16 @@ def main():
     parser.add_argument('--dryrun', action="store_true", help="Dry run with only switching matrix operation")
     parser.add_argument('--lcr', default=None, help="LCR meter resource")
     parser.add_argument('--pau', default=None, help="PAU resource")
-    parser.add_argument('-p', '--port', default='ws://210.119.41.69:8765', help="Switching matrix port")
+    parser.add_argument(
+        '-p', '--port', default=None,
+        help="Switching matrix port (default: IVCV_SWITCHING_MATRIX_URI or ws://localhost:8765)",
+    )
 
     args = parser.parse_args()
 
     measure_all(
-        args.port, args.Vstart, args.Vend, args.Vstep,
+        resolve_switching_matrix_uri(args.port),
+        args.Vstart, args.Vend, args.Vstep,
         resolve_result_path(args.resultpath), args.sensorname,
         args.lcr, args.pau,
         args.items, args.return_swp, args.dryrun,

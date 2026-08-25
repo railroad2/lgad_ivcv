@@ -27,7 +27,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ..ivcv.config import resolve_result_path
+from ..ivcv.config import (
+    SWITCHING_MATRIX_URI_ENV,
+    resolve_result_path,
+    resolve_switching_matrix_uri,
+)
 from .channel_grid import ChannelGrid
 from .iv_worker import IVRunConfig, IVWorker
 
@@ -71,7 +75,7 @@ class MainWindow(QMainWindow):
 
         connection = QGroupBox("Instrument connection")
         connection_form = QFormLayout(connection)
-        self.port_edit = QLineEdit("ws://210.119.41.69:8765")
+        self.port_edit = QLineEdit(resolve_switching_matrix_uri())
         self.smu_edit = QLineEdit()
         self.smu_edit.setPlaceholderText("Leave blank for automatic discovery")
         self.pau_edit = QLineEdit()
@@ -413,7 +417,10 @@ class MainWindow(QMainWindow):
             widget.setEnabled(not running)
 
     def _load_settings(self):
-        self.port_edit.setText(self._settings.value("iv/port", self.port_edit.text()))
+        if SWITCHING_MATRIX_URI_ENV not in os.environ:
+            self.port_edit.setText(
+                self._settings.value("iv/port", resolve_switching_matrix_uri())
+            )
         self.smu_edit.setText(self._settings.value("iv/smu", ""))
         self.pau_edit.setText(self._settings.value("iv/pau", ""))
         self.sensor_edit.setText(self._settings.value("iv/sensor", "test"))

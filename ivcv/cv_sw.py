@@ -2,16 +2,22 @@ import time
 from numbers import Integral
 
 from .CVMeasurement import CVMeasurement
+from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
 from ..inst import WayneKerr4300, Keithley6487
 from ..util.util import rowcol2nch
 
 
+_DEFAULT_PORT = object()
+
+
 class CV_sw:
 
-    def __init__(self, port=None, dryrun=False):
-        self.port = port or 'ws://localhost:8765'
+    def __init__(self, port=_DEFAULT_PORT, dryrun=False):
+        if port is _DEFAULT_PORT:
+            port = resolve_switching_matrix_uri()
+        self.port = port
         self.swm = SWmat(port)
         self.cv = CVMeasurement()
         self.lcr = WayneKerr4300()

@@ -1,7 +1,7 @@
 import argparse
 
 from lgad_ivcv.ivcv.iv_sw import IV_sw
-from lgad_ivcv.ivcv.config import resolve_result_path
+from lgad_ivcv.ivcv.config import resolve_result_path, resolve_switching_matrix_uri
 
 
 def measure_col(smport, v0, v1, dv, Icomp,
@@ -30,13 +30,17 @@ def main():
     parser.add_argument("--dryrun", action="store_true", help="Dry run with only switching matrix operation")
     parser.add_argument("--smu", default=None, help="SMU resource")
     parser.add_argument("--pau", default=None, help="PAU resource")
-    parser.add_argument("-p", "--port", default="ws://localhost:8765", help="Switching matrix port")
+    parser.add_argument(
+        "-p", "--port", default=None,
+        help="Switching matrix port (default: IVCV_SWITCHING_MATRIX_URI or ws://localhost:8765)",
+    )
     parser.add_argument("-I", "--Icompliance", type=float, default=1e-5, help="SMU current compliance")
 
     args = parser.parse_args()
 
     measure_col(
-        args.port, args.Vstart, args.Vend, args.Vstep, args.Icompliance,
+        resolve_switching_matrix_uri(args.port),
+        args.Vstart, args.Vend, args.Vstep, args.Icompliance,
         resolve_result_path(args.resultpath), args.sensorname,
         args.items, args.smu, args.pau,
         args.return_swp, args.dryrun,

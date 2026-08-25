@@ -19,7 +19,7 @@ python3 -m lgad_ivcv.gui
 Alternatively, run the launcher directly from the repository:
 
 ```bash
-./run_gui.py
+./scripts/run_gui.py
 ```
 
 The GUI provides individual-channel, row-wise, and column-wise IV measurement,

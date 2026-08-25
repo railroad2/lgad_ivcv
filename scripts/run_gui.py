@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-REPOSITORY_ROOT = Path(__file__).resolve().parent
+REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 WORKSPACE_ROOT = REPOSITORY_ROOT.parent
 
 # The package is this repository directory, while swm_ctrl is its sibling.

@@ -158,11 +158,13 @@ class IVMeasurement(Measurement):
             print(voltage, voltage_smu, current_smu, current_pau)  
 
         self.measurement_arr.append([voltage, voltage_smu, current_smu, current_pau])
-        self.output_arr.append([voltage, current_pau, current_smu])
+        point = [voltage, current_pau, current_smu]
+        self.output_arr.append(point)
         self.set_status_str(index, is_forced_return)
+        self.emit_data_point(point)
 
 
-    def start_measurement(self):
+    def start_measurement(self, reset_event=True):
         try:
             self._make_voltage_array(self.initial_voltage, self.final_voltage)
 
@@ -174,7 +176,8 @@ class IVMeasurement(Measurement):
 
             time.sleep(1)
 
-            self.event.clear()
+            if reset_event:
+                self.event.clear()
             self.measurement_thread = BaseThread(target=self._measure,
                                                  callback=self.save_results)
             self.measurement_thread.start()

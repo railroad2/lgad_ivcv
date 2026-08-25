@@ -31,6 +31,7 @@ class Measurement:
         self.n_data_drawn = 0
         self.measurement_arr = []  # to save as output txt
         self.output_arr = []  # for live plot
+        self.data_callback = None
 
         self.return_sweep_started = False
         self.measurement_in_progress = False
@@ -120,6 +121,14 @@ class Measurement:
             return None
         else:
             return self.output_arr
+
+    def set_data_callback(self, callback=None):
+        """Set an optional callback invoked for each newly measured plot point."""
+        self.data_callback = callback
+
+    def emit_data_point(self, point):
+        if self.data_callback is not None:
+            self.data_callback(tuple(point))
 
     def get_x_axis_label(self):
         return self.x_axis_label

@@ -1,1 +1,4 @@
-"""Graphical user interface for LGAD IV/CV measurements."""
+"""PySide6 graphical interfaces for :mod:`lgad_ivcv`.
+
+Run the IV channel measurement GUI with ``python -m lgad_ivcv.gui``.
+"""

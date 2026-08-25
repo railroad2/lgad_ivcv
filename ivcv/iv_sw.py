@@ -1,4 +1,5 @@
 import time
+import threading
 from numbers import Integral
 
 from .IVMeasurement import IVMeasurement
@@ -25,6 +26,7 @@ class IV_sw:
         self.rt_plot = False
         self.dryrun = dryrun
         self.iv.base_path = "./IV_test"
+        self._stop_requested = threading.Event()
 
     def set_switching_matrix(self, port):
         self.port = port
@@ -86,6 +88,24 @@ class IV_sw:
     
     def set_compliance(self, Icomp):
         self.Icomp = Icomp
+
+    def request_stop(self):
+        """Request a safe stop from another thread."""
+        if not hasattr(self, "_stop_requested"):
+            self._stop_requested = threading.Event()
+        self._stop_requested.set()
+        if hasattr(self.iv, "event"):
+            self.iv.event.set()
+
+    def reset_stop(self):
+        if not hasattr(self, "_stop_requested"):
+            self._stop_requested = threading.Event()
+        self._stop_requested.clear()
+        if hasattr(self.iv, "event"):
+            self.iv.event.clear()
+
+    def stop_requested(self):
+        return getattr(self, "_stop_requested", None) is not None and self._stop_requested.is_set()
     
     def measure_Vsweep(self, row=0, col=0, target_label=None):
         v0, v1, dv = self.v0, self.v1, self.dv
@@ -98,17 +118,30 @@ class IV_sw:
         iv.set_measurement_target_label(target_label)
         iv.initialize_measurement(self.smu, self.pau, self.sname)
         iv.set_measurement_options(v0, v1, dv, Icomp, return_swp, col, row, rt_plot)
-        iv.start_measurement()
+        if self.stop_requested():
+            return
+        iv.event.clear()
+        if self.stop_requested():
+            return
+        iv.start_measurement(reset_event=False)
 
-        iv.measurement_thread.join()
+        iv.measurement_thread.join_and_raise()
 
     def measure_coord(self, coords, verbose=1):
         self.measure_channel(rowcol2nch(coords), verbose=verbose)
 
-    def measure_channel(self, channels, verbose=1):
+    def measure_channel(
+        self,
+        channels,
+        verbose=1,
+        on_channel_start=None,
+        on_channel_complete=None,
+    ):
         self.iv.set_measurement_time()
         if isinstance(channels, Integral):
             channels = [int(channels)]
+        else:
+            channels = list(channels)
 
         swm = self.swm
         print('Turning off all switches.')
@@ -116,7 +149,10 @@ class IV_sw:
 
         started = time.time()
         try:
-            for channel in channels:
+            for index, channel in enumerate(channels):
+                if self.stop_requested():
+                    break
+
                 channel = int(channel)
                 if not 0 <= channel <= 255:
                     raise ValueError(f"Channel out of range: {channel}")
@@ -125,6 +161,12 @@ class IV_sw:
                 if verbose:
                     print("-" * 60)
                     print(f"Switch channel: {channel} ({row}, {col})")
+
+                if on_channel_start is not None:
+                    on_channel_start(channel, index, len(channels))
+
+                if self.stop_requested():
+                    break
 
                 swm.on(channel)
                 try:
@@ -144,10 +186,16 @@ class IV_sw:
                 finally:
                     swm.off(channel)
 
+                if on_channel_complete is not None:
+                    on_channel_complete(channel, index, len(channels))
+
                 print(
                     "*** Total time for measurement = "
                     f"{time.time() - started} s"
                 )
+
+                if self.stop_requested():
+                    break
         finally:
             try:
                 swm.off_all()

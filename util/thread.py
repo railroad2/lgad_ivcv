@@ -9,9 +9,25 @@ class BaseThread(threading.Thread):
         self.target_args = args
         self.callback = callback
         self.callback_args = callback_args
+        self.exception = None
 
     def target_with_callback(self):
-        self.target(*self.target_args)
-        if self.callback is not None:
-            self.callback(*self.callback_args)
+        try:
+            self.target(*self.target_args)
+        except BaseException as exc:
+            self.exception = exc
+            return
 
+        if self.callback is not None:
+            try:
+                self.callback(*self.callback_args)
+            except BaseException as exc:
+                self.exception = exc
+
+    def join_and_raise(self, timeout=None):
+        """Wait for the thread and re-raise a measurement/callback failure."""
+        self.join(timeout)
+        if self.is_alive():
+            return
+        if self.exception is not None:
+            raise self.exception

@@ -108,7 +108,7 @@ class CV_sw:
         )
         cv.print_options()
         cv.start_measurement()
-        cv.measurement_thread.join()
+        cv.measurement_thread.join_and_raise()
         time.sleep(0.5)
 
     def measure_coord(self, coords, verbose=1):

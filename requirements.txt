@@ -1,0 +1,7 @@
+numpy>=1.24
+matplotlib>=3.7
+PyVISA>=1.14
+pyserial>=3.5
+websockets>=12
+PySide6>=6.5
+pyqtgraph>=0.13.3

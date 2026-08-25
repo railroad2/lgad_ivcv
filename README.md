@@ -1,2 +1,22 @@
-# lgad ivcv
+# lgad_ivcv
 
+LGAD IV/CV measurement and switching-matrix control tools.
+
+## IV measurement GUI
+
+Install the dependencies from the repository directory:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+From the directory containing this repository, start the GUI with:
+
+```bash
+python3 -m lgad_ivcv.gui
+```
+
+The GUI provides the options of `scripts/iv_all.py`, a 16 by 16 linear-channel
+selector, live PAU/SMU plots, per-channel and sweep progress, and safe
+measurement cancellation. The initial result directory follows
+`IVCV_RESULT_PATH` when it is set, otherwise it is `./result`.

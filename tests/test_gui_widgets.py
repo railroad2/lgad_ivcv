@@ -8,7 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PySide6.QtCore import QSettings, Qt
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QFrame
 
     from lgad_ivcv.gui.channel_grid import ChannelGrid
     from lgad_ivcv.gui.cv_worker import CVRunConfig, CVWorker
@@ -65,6 +65,18 @@ class ChannelGridTests(unittest.TestCase):
         ):
             self.assertEqual(button.width(), button.height())
             self.assertEqual(button.width(), ChannelGrid.CELL_SIZE)
+
+    def test_header_separators_divide_labels_from_channel_cells(self):
+        grid = ChannelGrid()
+
+        self.assertEqual(
+            grid.header_horizontal_separator.frameShape(),
+            QFrame.HLine,
+        )
+        self.assertEqual(
+            grid.header_vertical_separator.frameShape(),
+            QFrame.VLine,
+        )
 
     def test_selection_mode_expands_cell_to_whole_row_or_column(self):
         grid = ChannelGrid()
@@ -329,7 +341,11 @@ class MainWindowTests(unittest.TestCase):
                 window.measurement_tabs.tabText(index)
                 for index in range(window.measurement_tabs.count())
             ],
-            ["IV", "CV"],
+            ["I-V", "C-V"],
+        )
+        self.assertGreaterEqual(
+            window.measurement_tabs.tabBar().tabSizeHint(0).width(),
+            120,
         )
         self.assertEqual(window.measurement_tabs.currentIndex(), 0)
         file_menu = next(
@@ -338,6 +354,20 @@ class MainWindowTests(unittest.TestCase):
             if action.text() == "File"
         )
         self.assertIn("Exit", [action.text() for action in file_menu.actions()])
+
+        window.close()
+
+    def test_channel_window_title_does_not_follow_measurement_mode(self):
+        window = MainWindow()
+        expected_title = "Measurement channels"
+
+        self.assertEqual(window.channel_window.windowTitle(), expected_title)
+        window.measurement_mode_combo.setCurrentIndex(1)
+        self.assertEqual(window.channel_window.windowTitle(), expected_title)
+        window.measurement_mode_combo.setCurrentIndex(2)
+        self.assertEqual(window.channel_window.windowTitle(), expected_title)
+        window.measurement_tabs.setCurrentIndex(1)
+        self.assertEqual(window.channel_window.windowTitle(), expected_title)
 
         window.close()
 

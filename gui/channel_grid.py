@@ -1,5 +1,5 @@
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QGridLayout, QPushButton, QToolButton, QWidget
+from PySide6.QtWidgets import QFrame, QGridLayout, QPushButton, QToolButton, QWidget
 
 
 class ChannelGrid(QWidget):
@@ -29,11 +29,21 @@ class ChannelGrid(QWidget):
         corner.setFixedSize(self.CELL_SIZE, self.CELL_SIZE)
         layout.addWidget(corner, 0, 0)
 
+        self.header_vertical_separator = QFrame()
+        self.header_vertical_separator.setFrameShape(QFrame.VLine)
+        self.header_vertical_separator.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(self.header_vertical_separator, 0, 1, 18, 1)
+
+        self.header_horizontal_separator = QFrame()
+        self.header_horizontal_separator.setFrameShape(QFrame.HLine)
+        self.header_horizontal_separator.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(self.header_horizontal_separator, 1, 0, 1, 18)
+
         for col in range(16):
             button = QPushButton(f"{col:02d}")
             button.setFixedSize(self.CELL_SIZE, self.CELL_SIZE)
             button.clicked.connect(lambda _checked=False, c=col: self.toggle_col(c))
-            layout.addWidget(button, 0, col + 1)
+            layout.addWidget(button, 0, col + 2)
             self._col_headers.append(button)
 
         for row in range(16):
@@ -41,7 +51,7 @@ class ChannelGrid(QWidget):
             header = QPushButton(row_label)
             header.setFixedSize(self.CELL_SIZE, self.CELL_SIZE)
             header.clicked.connect(lambda _checked=False, r=row: self.toggle_row(r))
-            layout.addWidget(header, row + 1, 0)
+            layout.addWidget(header, row + 2, 0)
             self._row_headers.append(header)
 
             row_buttons = []
@@ -60,7 +70,7 @@ class ChannelGrid(QWidget):
                 button.setToolTip(
                     f"row {row_label}, column {col:02d}, channel {channel}"
                 )
-                layout.addWidget(button, row + 1, col + 1)
+                layout.addWidget(button, row + 2, col + 2)
                 row_buttons.append(button)
             self._buttons.append(row_buttons)
 

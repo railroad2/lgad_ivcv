@@ -79,8 +79,11 @@ class MainWindow(QMainWindow):
         root = QVBoxLayout(central)
 
         self.measurement_tabs = QTabWidget()
-        self.measurement_tabs.addTab(self._build_iv_tab(), "IV")
-        self.measurement_tabs.addTab(self._build_cv_tab(), "CV")
+        self.measurement_tabs.setStyleSheet(
+            "QTabBar::tab { min-width: 120px; }"
+        )
+        self.measurement_tabs.addTab(self._build_iv_tab(), "I-V")
+        self.measurement_tabs.addTab(self._build_cv_tab(), "C-V")
         self.measurement_tabs.setCurrentIndex(0)
         root.addWidget(self.measurement_tabs)
 
@@ -453,7 +456,6 @@ class MainWindow(QMainWindow):
         mode = self.measurement_mode_combo.currentData() or "channel"
         singular, plural = self.MODE_LABELS[mode]
         self.channel_grid.set_selection_mode(mode)
-        self.channel_window.setWindowTitle(f"Measurement {plural}")
         self.channel_progress.setFormat(f"{singular} %v/%m")
         self._channel_selection_changed(
             len(self.channel_grid.selected_targets())
@@ -462,7 +464,6 @@ class MainWindow(QMainWindow):
     def _measurement_tab_changed(self, index):
         if index == 1:
             self.channel_grid.set_selection_mode("channel")
-            self.channel_window.setWindowTitle("CV measurement channels")
             self._channel_selection_changed()
         else:
             self._measurement_mode_changed()

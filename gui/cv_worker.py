@@ -30,6 +30,7 @@ class CVWorker(QObject):
     """Run the blocking CV API outside the Qt GUI thread."""
 
     status_changed = Signal(str)
+    matrix_status_changed = Signal(str)
     log_message = Signal(str)
     target_started = Signal(str, int, int, int)
     target_completed = Signal(str, int, int, int)
@@ -116,12 +117,16 @@ class CVWorker(QObject):
     def run(self):
         config = self.config
         runner = None
+        matrix_connected = False
         try:
+            self.matrix_status_changed.emit("Connecting...")
             self.status_changed.emit(
                 "Connecting to the LCR meter and switching matrix..."
             )
             runner = CV_sw(config.port, config.dry_run)
             self._runner = runner
+            matrix_connected = True
+            self.matrix_status_changed.emit("Connected")
             self._publish_measurement_status("starting")
             runner.cv.set_data_callback(self._point_measured)
             runner.set_basepath(config.result_path)
@@ -177,6 +182,8 @@ class CVWorker(QObject):
             runner = None
             self.completed.emit(stopped, result_dir or config.result_path)
         except BaseException as exc:
+            if not matrix_connected:
+                self.matrix_status_changed.emit("Connection failed")
             if runner is not None:
                 self._publish_measurement_status(
                     "failed",
@@ -190,4 +197,6 @@ class CVWorker(QObject):
         finally:
             if runner is not None:
                 runner.close()
+            if matrix_connected:
+                self.matrix_status_changed.emit("Disconnected")
             self._runner = None

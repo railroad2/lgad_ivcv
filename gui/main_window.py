@@ -86,6 +86,12 @@ class MainWindow(QMainWindow):
         self.result_path_edit.textChanged.connect(self._update_output_paths)
         self.sensor_edit.textChanged.connect(self._update_output_paths)
         self.cv_sensor_edit.textChanged.connect(self._update_output_paths)
+        self.port_edit.textChanged.connect(
+            lambda: self._set_iv_matrix_status("Disconnected")
+        )
+        self.cv_port_edit.textChanged.connect(
+            lambda: self._set_cv_matrix_status("Disconnected")
+        )
         self.measurement_tabs.currentChanged.connect(self._measurement_tab_changed)
         self._load_settings()
         self._update_output_paths()
@@ -150,18 +156,31 @@ class MainWindow(QMainWindow):
         settings = QVBoxLayout()
         top_row = QHBoxLayout()
 
-        connection = QGroupBox("Instrument connection")
-        connection_form = QFormLayout(connection)
+        connection = QWidget()
+        connection_layout = QVBoxLayout(connection)
+        connection_layout.setContentsMargins(0, 0, 0, 0)
+
+        switching_matrix = QGroupBox("Switching matrix")
+        switching_matrix_form = QFormLayout(switching_matrix)
         self.cv_port_edit = QLineEdit(resolve_switching_matrix_uri())
+        self.cv_matrix_status_label = self._matrix_status_label()
+        switching_matrix_form.addRow("WebSocket address", self.cv_port_edit)
+        switching_matrix_form.addRow("Status", self.cv_matrix_status_label)
+
+        instruments = QGroupBox("Instruments")
+        instruments_form = QFormLayout(instruments)
         self.cv_lcr_edit = QLineEdit()
         self.cv_lcr_edit.setPlaceholderText("Leave blank for automatic discovery")
         self.cv_pau_edit = QLineEdit()
         self.cv_pau_edit.setPlaceholderText("Optional external bias source")
         self.cv_dry_run_check = QCheckBox("Dry run")
-        connection_form.addRow("Switching matrix", self.cv_port_edit)
-        connection_form.addRow("LCR VISA resource", self.cv_lcr_edit)
-        connection_form.addRow("PAU VISA resource", self.cv_pau_edit)
-        connection_form.addRow("", self.cv_dry_run_check)
+        instruments_form.addRow("LCR VISA resource", self.cv_lcr_edit)
+        instruments_form.addRow("PAU VISA resource", self.cv_pau_edit)
+        instruments_form.addRow("", self.cv_dry_run_check)
+
+        connection_layout.addWidget(switching_matrix)
+        connection_layout.addWidget(instruments)
+        connection_layout.addStretch(1)
 
         measurement = QGroupBox("CV measurement settings")
         measurement_form = QFormLayout(measurement)
@@ -291,18 +310,31 @@ class MainWindow(QMainWindow):
         settings = QVBoxLayout()
         top_row = QHBoxLayout()
 
-        connection = QGroupBox("Instrument connection")
-        connection_form = QFormLayout(connection)
+        connection = QWidget()
+        connection_layout = QVBoxLayout(connection)
+        connection_layout.setContentsMargins(0, 0, 0, 0)
+
+        switching_matrix = QGroupBox("Switching matrix")
+        switching_matrix_form = QFormLayout(switching_matrix)
         self.port_edit = QLineEdit(resolve_switching_matrix_uri())
+        self.matrix_status_label = self._matrix_status_label()
+        switching_matrix_form.addRow("WebSocket address", self.port_edit)
+        switching_matrix_form.addRow("Status", self.matrix_status_label)
+
+        instruments = QGroupBox("Instruments")
+        instruments_form = QFormLayout(instruments)
         self.smu_edit = QLineEdit()
         self.smu_edit.setPlaceholderText("Leave blank for automatic discovery")
         self.pau_edit = QLineEdit()
         self.pau_edit.setPlaceholderText("Leave blank for automatic discovery")
         self.dry_run_check = QCheckBox("Dry run")
-        connection_form.addRow("Switching matrix", self.port_edit)
-        connection_form.addRow("SMU VISA resource", self.smu_edit)
-        connection_form.addRow("PAU VISA resource", self.pau_edit)
-        connection_form.addRow("", self.dry_run_check)
+        instruments_form.addRow("SMU VISA resource", self.smu_edit)
+        instruments_form.addRow("PAU VISA resource", self.pau_edit)
+        instruments_form.addRow("", self.dry_run_check)
+
+        connection_layout.addWidget(switching_matrix)
+        connection_layout.addWidget(instruments)
+        connection_layout.addStretch(1)
 
         measurement = QGroupBox("IV measurement settings")
         measurement_form = QFormLayout(measurement)
@@ -362,6 +394,31 @@ class MainWindow(QMainWindow):
         settings.addLayout(top_row)
         settings.addWidget(output)
         return settings
+
+    @classmethod
+    def _matrix_status_label(cls):
+        label = QLabel()
+        cls._set_matrix_status(label, "Disconnected")
+        return label
+
+    @staticmethod
+    def _set_matrix_status(label, status):
+        colors = {
+            "Connected": "#18763a",
+            "Connecting...": "#9a6700",
+            "Connection failed": "#b00020",
+            "Disconnected": "#666666",
+        }
+        label.setText(status)
+        label.setStyleSheet(
+            f"color: {colors.get(status, '#666666')}; font-weight: bold;"
+        )
+
+    def _set_iv_matrix_status(self, status):
+        self._set_matrix_status(self.matrix_status_label, status)
+
+    def _set_cv_matrix_status(self, status):
+        self._set_matrix_status(self.cv_matrix_status_label, status)
 
     @staticmethod
     def _voltage_spin(value):
@@ -672,6 +729,7 @@ class MainWindow(QMainWindow):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.status_changed.connect(self.statusBar().showMessage)
+        worker.matrix_status_changed.connect(self._set_iv_matrix_status)
         worker.log_message.connect(self._append_log)
         worker.target_started.connect(self._target_started)
         worker.target_completed.connect(self._target_completed)
@@ -688,6 +746,7 @@ class MainWindow(QMainWindow):
         self._worker = worker
         self._active_measurement = "iv"
         self._set_running(True, "iv")
+        self._set_iv_matrix_status("Connecting...")
         self._show_live_iv_window()
         plural = self.MODE_LABELS[config.measurement_mode][1]
         self._append_log(
@@ -722,6 +781,7 @@ class MainWindow(QMainWindow):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.status_changed.connect(self.statusBar().showMessage)
+        worker.matrix_status_changed.connect(self._set_cv_matrix_status)
         worker.log_message.connect(self._append_cv_log)
         worker.target_started.connect(self._cv_target_started)
         worker.target_completed.connect(self._cv_target_completed)
@@ -738,6 +798,7 @@ class MainWindow(QMainWindow):
         self._worker = worker
         self._active_measurement = "cv"
         self._set_running(True, "cv")
+        self._set_cv_matrix_status("Connecting...")
         self._show_live_cv_window()
         self._append_cv_log(
             f"CV measurement started: {len(config.targets)} "

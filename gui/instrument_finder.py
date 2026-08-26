@@ -1,4 +1,4 @@
-from PySide6.QtCore import QObject, Signal, Slot
+from PySide6.QtCore import QThread, Signal
 
 from ..inst import Keithley2400, Keithley6487, WayneKerr4300
 
@@ -10,19 +10,17 @@ INSTRUMENT_FACTORIES = {
 }
 
 
-class InstrumentFinder(QObject):
+class InstrumentFinder(QThread):
     """Run blocking VISA discovery outside the GUI thread."""
 
     found = Signal(str)
     not_found = Signal()
     failed = Signal(str)
-    finished = Signal()
 
     def __init__(self, instrument_type, parent=None):
         super().__init__(parent)
         self.instrument_type = instrument_type
 
-    @Slot()
     def run(self):
         try:
             factory = INSTRUMENT_FACTORIES[self.instrument_type]
@@ -33,5 +31,3 @@ class InstrumentFinder(QObject):
                 self.not_found.emit()
         except Exception as exc:
             self.failed.emit(str(exc) or type(exc).__name__)
-        finally:
-            self.finished.emit()

@@ -174,16 +174,12 @@ class MainWindow(QMainWindow):
         self.cv_lcr_edit.setPlaceholderText("Leave blank for automatic discovery")
         self.cv_lcr_find_button = QPushButton("Find")
         self.cv_lcr_find_button.setFixedWidth(55)
-        self.cv_lcr_find_button.clicked.connect(
-            lambda: self._start_instrument_search("cv_lcr")
-        )
+        self.cv_lcr_find_button.clicked.connect(self._find_cv_lcr)
         self.cv_pau_edit = QLineEdit()
         self.cv_pau_edit.setPlaceholderText("Optional external bias source")
         self.cv_pau_find_button = QPushButton("Find")
         self.cv_pau_find_button.setFixedWidth(55)
-        self.cv_pau_find_button.clicked.connect(
-            lambda: self._start_instrument_search("cv_pau")
-        )
+        self.cv_pau_find_button.clicked.connect(self._find_cv_pau)
         self.cv_dry_run_check = QCheckBox("Dry run")
         cv_lcr_row = QHBoxLayout()
         cv_lcr_row.addWidget(self.cv_lcr_edit, 1)
@@ -344,16 +340,12 @@ class MainWindow(QMainWindow):
         self.smu_edit.setPlaceholderText("Leave blank for automatic discovery")
         self.smu_find_button = QPushButton("Find")
         self.smu_find_button.setFixedWidth(55)
-        self.smu_find_button.clicked.connect(
-            lambda: self._start_instrument_search("iv_smu")
-        )
+        self.smu_find_button.clicked.connect(self._find_iv_smu)
         self.pau_edit = QLineEdit()
         self.pau_edit.setPlaceholderText("Leave blank for automatic discovery")
         self.pau_find_button = QPushButton("Find")
         self.pau_find_button.setFixedWidth(55)
-        self.pau_find_button.clicked.connect(
-            lambda: self._start_instrument_search("iv_pau")
-        )
+        self.pau_find_button.clicked.connect(self._find_iv_pau)
         self.dry_run_check = QCheckBox("Dry run")
         smu_row = QHBoxLayout()
         smu_row.addWidget(self.smu_edit, 1)
@@ -504,6 +496,18 @@ class MainWindow(QMainWindow):
             self.cv_pau_find_button,
         )
 
+    def _find_iv_smu(self):
+        self._start_instrument_search("iv_smu")
+
+    def _find_iv_pau(self):
+        self._start_instrument_search("iv_pau")
+
+    def _find_cv_lcr(self):
+        self._start_instrument_search("cv_lcr")
+
+    def _find_cv_pau(self):
+        self._start_instrument_search("cv_pau")
+
     def _start_instrument_search(self, key):
         if self._worker is not None or self._instrument_search is not None:
             return
@@ -518,23 +522,24 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(False)
         self.cv_start_button.setEnabled(False)
 
-        thread = QThread(self)
-        finder = InstrumentFinder(instrument_type)
-        finder.moveToThread(thread)
-        thread.started.connect(finder.run)
-        finder.found.connect(
-            lambda resource: self._instrument_found(key, resource)
-        )
-        finder.not_found.connect(lambda: self._instrument_not_found(key))
-        finder.failed.connect(
-            lambda message: self._instrument_find_failed(key, message)
-        )
-        finder.finished.connect(thread.quit)
-        thread.finished.connect(finder.deleteLater)
-        thread.finished.connect(self._instrument_search_finished)
+        finder = InstrumentFinder(instrument_type, self)
+        finder.search_key = key
+        finder.found.connect(self._instrument_found_from_search)
+        finder.not_found.connect(self._instrument_not_found_from_search)
+        finder.failed.connect(self._instrument_find_failed_from_search)
+        finder.finished.connect(self._instrument_search_finished)
 
-        self._instrument_search = (thread, finder)
-        thread.start()
+        self._instrument_search = finder
+        finder.start()
+
+    def _instrument_found_from_search(self, resource):
+        self._instrument_found(self.sender().search_key, resource)
+
+    def _instrument_not_found_from_search(self):
+        self._instrument_not_found(self.sender().search_key)
+
+    def _instrument_find_failed_from_search(self, message):
+        self._instrument_find_failed(self.sender().search_key, message)
 
     def _instrument_found(self, key, resource):
         _instrument_type, name, field, logger = (
@@ -566,7 +571,7 @@ class MainWindow(QMainWindow):
         search = self._instrument_search
         self._instrument_search = None
         if search is not None:
-            search[0].deleteLater()
+            search.deleteLater()
         if self._worker is None:
             self.start_button.setEnabled(True)
             self.cv_start_button.setEnabled(True)

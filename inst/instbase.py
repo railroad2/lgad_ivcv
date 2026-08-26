@@ -37,40 +37,38 @@ class InstBase:
     def find_inst(self, read_termination=None, msg=None):
         if read_termination is None:
             read_termination = self._read_termination
-        
+
         if msg is None:
             msg = self._verify_msg
 
         rm = pyvisa.ResourceManager()
-        rlist = rm.list_resources()
+        try:
+            for rname in rm.list_resources():
+                if 'ttyUSB' not in rname:
+                    continue
 
-        for rname in rlist:
-            if 'ttyUSB' not in rname:
-                continue
+                tmp = None
+                try:
+                    tmp = rm.open_resource(
+                        rname,
+                        read_termination=read_termination,
+                    )
+                    idn = tmp.query("*idn?")
+                except pyvisa.VisaIOError as exc:
+                    if exc.error_code == pyvisa.constants.VI_ERROR_TMO:
+                        print(f"Operation timed out for {rname}")
+                    continue
+                finally:
+                    if tmp is not None:
+                        tmp.close()
 
-            tmp = rm.open_resource(rname, read_termination=read_termination)
-            #tmp.timeout = 1
-            try:
-                idn = tmp.query("*idn?")
-                tmp.close()
-            except pyvisa.VisaIOError as e:
-                if e.error_code == pyvisa.constants.VI_ERROR_TMO:
-                    print (f"Operation timed out for {rname}")
-                tmp.close()
-                continue
+                if msg in idn:
+                    print(f"{msg} is found in {idn} from {rname}.")
+                    return rname
+        finally:
+            rm.close()
 
-            if msg not in idn:
-                tmp.close()
-                continue 
-            else:
-                tmp.close()
-                print (f"{msg} is found in {idn} from {rname}.")
-                del rm
-                del tmp
-                #self._inst = tmp
-                return rname
-
-        return
+        return None
 
     def close(self):
         self._inst.close()
@@ -126,5 +124,4 @@ class InstBase:
                     val1.append(-1e-30)
 
         return val1
-
 

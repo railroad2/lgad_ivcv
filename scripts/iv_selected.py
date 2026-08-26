@@ -2,15 +2,7 @@ import argparse
 
 from lgad_ivcv.ivcv.config import resolve_result_path, resolve_switching_matrix_uri
 from lgad_ivcv.ivcv.iv_sw import IV_sw
-
-
-def channel_number(value):
-    channel = int(value)
-    if not 0 <= channel <= 255:
-        raise argparse.ArgumentTypeError(
-            f"channel must be between 0 and 255: {value}"
-        )
-    return channel
+from lgad_ivcv.scripts.cli_args import channel_number
 
 
 def measure_selected(
@@ -48,7 +40,7 @@ def main():
         "channels",
         nargs="+",
         type=channel_number,
-        help="Linear channel numbers (0..255)",
+        help="Channels as numbers 0..255 or labels A00..P15",
     )
     parser.add_argument("--Vstart", type=float, default=0, help="Start voltage")
     parser.add_argument("--Vend", type=float, default=-10, help="End voltage")

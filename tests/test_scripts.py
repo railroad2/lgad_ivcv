@@ -70,6 +70,17 @@ class ScriptLifecycleTests(unittest.TestCase):
         col_runner.measure_col.assert_called_once_with([3, 4])
         col_runner.__exit__.assert_called_once()
 
+    def test_row_argument_accepts_numbers_and_letters(self):
+        self.assertEqual(iv_row.row_number("0"), 0)
+        self.assertEqual(iv_row.row_number("15"), 15)
+        self.assertEqual(iv_row.row_number("A"), 0)
+        self.assertEqual(iv_row.row_number("p"), 15)
+
+        for invalid in ("-1", "16", "Q", "rowA"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaisesRegex(Exception, "0..15 or A..P"):
+                    iv_row.row_number(invalid)
+
     def test_selected_script_measures_only_requested_channels(self):
         runner = self._runner()
         with patch.object(iv_selected, "IV_sw", return_value=runner):
@@ -93,7 +104,10 @@ class ScriptLifecycleTests(unittest.TestCase):
 
     def test_selected_channel_argument_range(self):
         self.assertEqual(iv_selected.channel_number("255"), 255)
-        with self.assertRaisesRegex(Exception, "between 0 and 255"):
+        self.assertEqual(iv_selected.channel_number("A00"), 0)
+        self.assertEqual(iv_selected.channel_number("C02"), 34)
+        self.assertEqual(iv_selected.channel_number("p15"), 255)
+        with self.assertRaisesRegex(Exception, "0..255 or A00..P15"):
             iv_selected.channel_number("256")
 
     def test_cv_selected_script_measures_only_requested_channels(self):
@@ -118,7 +132,8 @@ class ScriptLifecycleTests(unittest.TestCase):
             )
 
         self.assertEqual(cv_selected.channel_number("0"), 0)
-        with self.assertRaisesRegex(Exception, "between 0 and 255"):
+        self.assertEqual(cv_selected.channel_number("C02"), 34)
+        with self.assertRaisesRegex(Exception, "0..255 or A00..P15"):
             cv_selected.channel_number("-1")
 
     def test_iv_once_runs_without_switching_matrix_selection(self):

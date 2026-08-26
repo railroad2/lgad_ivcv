@@ -4,6 +4,26 @@ from lgad_ivcv.ivcv.iv_sw import IV_sw
 from lgad_ivcv.ivcv.config import resolve_result_path, resolve_switching_matrix_uri
 
 
+def row_number(value):
+    """Parse a row as either 0..15 or A..P."""
+    text = str(value).strip()
+    if len(text) == 1 and "A" <= text.upper() <= "P":
+        return ord(text.upper()) - ord("A")
+
+    try:
+        row = int(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(
+            f"row must be 0..15 or A..P: {value}"
+        ) from exc
+
+    if not 0 <= row <= 15:
+        raise argparse.ArgumentTypeError(
+            f"row must be 0..15 or A..P: {value}"
+        )
+    return row
+
+
 def measure_rows(smport, v0, v1, dv, Icomp,
                  resultpath, sensor_name,
                  rows=None, rsmu=None, rpau=None,
@@ -20,7 +40,12 @@ def measure_rows(smport, v0, v1, dv, Icomp,
 
 def main():
     parser = argparse.ArgumentParser(description="Measure IV with all 16 pixels in each row connected together.")
-    parser.add_argument("items", nargs="*", type=int, help="Row numbers (0..15)")
+    parser.add_argument(
+        "items",
+        nargs="*",
+        type=row_number,
+        help="Rows as numbers 0..15 or labels A..P",
+    )
     parser.add_argument("--Vstart", type=float, default=0, help="Start voltage")
     parser.add_argument("--Vend", type=float, default=-10, help="End voltage")
     parser.add_argument("--Vstep", type=float, default=1, help="Voltage step")

@@ -93,12 +93,12 @@ python3 scripts/cv_once.py --sensorname sensor01
 
 The measurement programs use PyVISA resource names to open the instruments:
 
-| Measurement | Option | Instrument | Automatic setup |
+| Measurement | Option | Instrument | VISA resource name |
 | --- | --- | --- | --- |
 | IV | `--smu` | Keithley 2400 SMU | Searched automatically when omitted |
 | IV | `--pau` | Keithley 6487 picoammeter | Searched automatically when omitted |
 | CV | `--lcr` | Wayne Kerr 4300 LCR meter | Searched automatically when omitted |
-| CV | `--pau` | Keithley 6487 picoammeter/bias source | Not searched automatically |
+| CV | `--pau` | (Optional) Keithley 6487 picoammeter/bias source | Not searched automatically |
 
 List the VISA resources visible to Python with:
 
@@ -132,9 +132,9 @@ device name must be supplied explicitly.
 
 IV measurement requires the SMU for voltage bias and can also use the
 picoammeter for an additional current reading. CV measurement requires the LCR
-meter. When `--pau` is omitted for CV, the LCR meter supplies the DC bias and
-the negative bias is limited to -40 V. Supplying a Keithley 6487 resource with
-`--pau` selects it as the external bias source.
+meter. The PAU is optional for CV. When `--pau` is omitted, the LCR meter
+supplies the DC bias and the negative bias is limited to -40 V. Supplying a
+Keithley 6487 resource with `--pau` selects it as the external bias source.
 
 ### Dry run
 

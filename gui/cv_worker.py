@@ -34,6 +34,7 @@ class CVWorker(QObject):
     target_started = Signal(str, int, int, int)
     target_completed = Signal(str, int, int, int)
     point_measured = Signal(str, int, float, float, float, float, int, int)
+    instrument_resource_resolved = Signal(str, str, str)
     result_path_ready = Signal(str)
     completed = Signal(bool, str)
     failed = Signal(str)
@@ -130,9 +131,26 @@ class CVWorker(QObject):
             self.result_path_ready.emit(result_dir)
 
             runner.set_lcr(config.lcr_resource)
+            if config.lcr_resource is None:
+                resource = getattr(runner, "lcr_rsrc", None)
+                if resource:
+                    self.instrument_resource_resolved.emit(
+                        "lcr",
+                        str(resource),
+                        str(getattr(runner.lcr, "found_idn", "") or ""),
+                    )
             if self._stop_event.is_set():
                 runner.request_stop()
             runner.set_pau(config.pau_resource)
+            if config.pau_resource is None:
+                resource = getattr(runner, "pau_rsrc", None)
+                pau = getattr(runner, "pau", None)
+                if resource and pau is not None:
+                    self.instrument_resource_resolved.emit(
+                        "pau",
+                        str(resource),
+                        str(getattr(pau, "found_idn", "") or ""),
+                    )
             runner.set_sweep(
                 config.start_voltage,
                 config.end_voltage,

@@ -49,6 +49,10 @@ class InstrumentDiscoveryTests(unittest.TestCase):
             found = instrument.find_inst(msg="MODEL 2400")
 
         self.assertEqual(found, "ASRL/dev/ttyUSB0::INSTR")
+        self.assertEqual(
+            instrument.found_idn,
+            "KEITHLEY INSTRUMENTS INC.,MODEL 2400",
+        )
         self.assertEqual(resource.close_count, 1)
         self.assertEqual(manager.close_count, 1)
 
@@ -66,6 +70,7 @@ class InstrumentDiscoveryTests(unittest.TestCase):
             found = instrument.find_inst(msg="MODEL 2400")
 
         self.assertIsNone(found)
+        self.assertIsNone(instrument.found_idn)
         self.assertEqual(resource.close_count, 1)
         self.assertEqual(manager.close_count, 1)
 

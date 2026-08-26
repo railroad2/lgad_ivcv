@@ -532,8 +532,12 @@ class MainWindow(QMainWindow):
         self._instrument_search = finder
         finder.start()
 
-    def _instrument_found_from_search(self, resource):
-        self._instrument_found(self.sender().search_key, resource)
+    def _instrument_found_from_search(self, resource, device_name):
+        self._instrument_found(
+            self.sender().search_key,
+            resource,
+            device_name,
+        )
 
     def _instrument_not_found_from_search(self):
         self._instrument_not_found(self.sender().search_key)
@@ -541,12 +545,14 @@ class MainWindow(QMainWindow):
     def _instrument_find_failed_from_search(self, message):
         self._instrument_find_failed(self.sender().search_key, message)
 
-    def _instrument_found(self, key, resource):
+    def _instrument_found(self, key, resource, device_name=""):
         _instrument_type, name, field, logger = (
             self._instrument_search_specification(key)
         )
         field.setText(resource)
         logger(f"Found {name}: {resource}")
+        if device_name:
+            logger(f"Instrument identity: {device_name}")
         self.statusBar().showMessage(f"Found {name}: {resource}")
 
     def _instrument_not_found(self, key):
@@ -891,6 +897,9 @@ class MainWindow(QMainWindow):
         worker.target_started.connect(self._target_started)
         worker.target_completed.connect(self._target_completed)
         worker.point_measured.connect(self._point_measured)
+        worker.instrument_resource_resolved.connect(
+            self._iv_instrument_resource_resolved
+        )
         worker.result_path_ready.connect(self._result_path_ready)
         worker.completed.connect(self._measurement_completed)
         worker.failed.connect(self._measurement_failed)
@@ -941,6 +950,9 @@ class MainWindow(QMainWindow):
         worker.target_started.connect(self._cv_target_started)
         worker.target_completed.connect(self._cv_target_completed)
         worker.point_measured.connect(self._cv_point_measured)
+        worker.instrument_resource_resolved.connect(
+            self._cv_instrument_resource_resolved
+        )
         worker.result_path_ready.connect(self._cv_result_path_ready)
         worker.completed.connect(self._cv_measurement_completed)
         worker.failed.connect(self._cv_measurement_failed)
@@ -975,6 +987,38 @@ class MainWindow(QMainWindow):
             self._append_cv_log(f"Cannot create status log: {exc}")
             return
         self._append_cv_log(f"Status log: {self._cv_log_file_path}")
+
+    def _iv_instrument_resource_resolved(
+        self,
+        instrument_type,
+        resource,
+        identity,
+    ):
+        fields = {
+            "smu": ("SMU", self.smu_edit),
+            "pau": ("PAU", self.pau_edit),
+        }
+        name, field = fields[instrument_type]
+        field.setText(resource)
+        self._append_log(f"Automatically discovered {name}: {resource}")
+        if identity:
+            self._append_log(f"Instrument identity: {identity}")
+
+    def _cv_instrument_resource_resolved(
+        self,
+        instrument_type,
+        resource,
+        identity,
+    ):
+        fields = {
+            "lcr": ("LCR meter", self.cv_lcr_edit),
+            "pau": ("PAU", self.cv_pau_edit),
+        }
+        name, field = fields[instrument_type]
+        field.setText(resource)
+        self._append_cv_log(f"Automatically discovered {name}: {resource}")
+        if identity:
+            self._append_cv_log(f"Instrument identity: {identity}")
 
     def _stop_measurement(self):
         if self._worker is None or self._active_measurement != "iv":

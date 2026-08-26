@@ -117,6 +117,11 @@ class FakeStatusMatrix:
         self.statuses.append(status)
 
 
+class FakeInstrumentIdentity:
+    def __init__(self, identity):
+        self.found_idn = identity
+
+
 class FakeIVRunner:
     last_instance = None
 
@@ -124,6 +129,8 @@ class FakeIVRunner:
         type(self).last_instance = self
         self.iv = FakeIVMeasurement()
         self.swm = FakeStatusMatrix()
+        self.smu = FakeInstrumentIdentity("FAKE SMU")
+        self.pau = FakeInstrumentIdentity("FAKE PAU")
 
     def __enter__(self):
         return self
@@ -134,11 +141,11 @@ class FakeIVRunner:
     def close(self):
         pass
 
-    def set_smu(self, _resource):
-        pass
+    def set_smu(self, resource):
+        self.smu_rsrc = resource or "ASRL/dev/ttyUSB0::INSTR"
 
-    def set_pau(self, _resource):
-        pass
+    def set_pau(self, resource):
+        self.pau_rsrc = resource or "ASRL/dev/ttyUSB1::INSTR"
 
     def set_basepath(self, _path):
         pass
@@ -191,6 +198,8 @@ class FakeCVRunner:
         self.ac_level = None
         self.freq = None
         self.swm = FakeStatusMatrix()
+        self.lcr = FakeInstrumentIdentity("FAKE LCR")
+        self.pau = FakeInstrumentIdentity("FAKE PAU")
 
     def __enter__(self):
         return self
@@ -210,11 +219,11 @@ class FakeCVRunner:
     def prepare_output_directory(self, _measurement_mode=None):
         return self.cv.get_out_dir()
 
-    def set_lcr(self, _resource):
-        pass
+    def set_lcr(self, resource):
+        self.lcr_rsrc = resource or "ASRL/dev/ttyUSB2::INSTR"
 
-    def set_pau(self, _resource):
-        pass
+    def set_pau(self, resource):
+        self.pau_rsrc = resource
 
     def set_sweep(self, *_args):
         pass
@@ -266,9 +275,13 @@ class IVWorkerTests(unittest.TestCase):
                 points = []
                 completions = []
                 result_paths = []
+                resources = []
                 worker.point_measured.connect(lambda *args: points.append(args))
                 worker.completed.connect(lambda *args: completions.append(args))
                 worker.result_path_ready.connect(result_paths.append)
+                worker.instrument_resource_resolved.connect(
+                    lambda *args: resources.append(args)
+                )
 
                 with patch("lgad_ivcv.gui.iv_worker.IV_sw", FakeIVRunner):
                     worker.run()
@@ -282,6 +295,13 @@ class IVWorkerTests(unittest.TestCase):
                     [(False, "/tmp/result/measurement")],
                 )
                 self.assertEqual(result_paths, ["/tmp/result/measurement"])
+                self.assertEqual(
+                    resources,
+                    [
+                        ("smu", "ASRL/dev/ttyUSB0::INSTR", "FAKE SMU"),
+                        ("pau", "ASRL/dev/ttyUSB1::INSTR", "FAKE PAU"),
+                    ],
+                )
                 statuses = FakeIVRunner.last_instance.swm.statuses
                 self.assertEqual(
                     [status["status"] for status in statuses],
@@ -319,9 +339,13 @@ class CVWorkerTests(unittest.TestCase):
                 points = []
                 starts = []
                 completions = []
+                resources = []
                 worker.point_measured.connect(lambda *args: points.append(args))
                 worker.target_started.connect(lambda *args: starts.append(args))
                 worker.completed.connect(lambda *args: completions.append(args))
+                worker.instrument_resource_resolved.connect(
+                    lambda *args: resources.append(args)
+                )
 
                 with patch("lgad_ivcv.gui.cv_worker.CV_sw", FakeCVRunner):
                     worker.run()
@@ -334,6 +358,12 @@ class CVWorkerTests(unittest.TestCase):
                 self.assertEqual(
                     completions,
                     [(False, "/tmp/result/measurement")],
+                )
+                self.assertEqual(
+                    resources,
+                    [
+                        ("lcr", "ASRL/dev/ttyUSB2::INSTR", "FAKE LCR"),
+                    ],
                 )
                 statuses = FakeCVRunner.last_instance.swm.statuses
                 self.assertEqual(
@@ -560,6 +590,8 @@ class MainWindowTests(unittest.TestCase):
 
     def test_find_button_populates_visa_resource(self):
         class FakeSMU:
+            found_idn = "KEITHLEY INSTRUMENTS INC.,MODEL 2400"
+
             def find_inst(self):
                 return "ASRL/dev/ttyUSB0::INSTR"
 
@@ -582,8 +614,40 @@ class MainWindowTests(unittest.TestCase):
             "ASRL/dev/ttyUSB0::INSTR",
         )
         self.assertIn("Found SMU", window.log_edit.toPlainText())
+        self.assertIn(
+            "Instrument identity: KEITHLEY INSTRUMENTS INC.,MODEL 2400",
+            window.log_edit.toPlainText(),
+        )
 
         window.close()
+
+    def test_automatically_discovered_resources_fill_gui_fields(self):
+        window = MainWindow()
+
+        window._iv_instrument_resource_resolved(
+            "smu",
+            "ASRL/dev/ttyUSB4::INSTR",
+            "KEITHLEY MODEL 2400",
+        )
+        window._cv_instrument_resource_resolved(
+            "lcr",
+            "ASRL/dev/ttyUSB5::INSTR",
+            "WAYNE KERR MODEL 4300",
+        )
+
+        self.assertEqual(window.smu_edit.text(), "ASRL/dev/ttyUSB4::INSTR")
+        self.assertEqual(window.cv_lcr_edit.text(), "ASRL/dev/ttyUSB5::INSTR")
+        self.assertIn(
+            "Automatically discovered SMU",
+            window.log_edit.toPlainText(),
+        )
+        self.assertIn(
+            "Automatically discovered LCR meter",
+            window.cv_log_edit.toPlainText(),
+        )
+
+        window.close()
+        QSettings().clear()
 
     def test_channel_window_title_does_not_follow_measurement_mode(self):
         window = MainWindow()

@@ -35,6 +35,7 @@ class InstBase:
         return 0
 
     def find_inst(self, read_termination=None, msg=None):
+        self.found_idn = None
         if read_termination is None:
             read_termination = self._read_termination
 
@@ -63,6 +64,7 @@ class InstBase:
                         tmp.close()
 
                 if msg in idn:
+                    self.found_idn = idn.strip()
                     print(f"{msg} is found in {idn} from {rname}.")
                     return rname
         finally:
@@ -124,4 +126,3 @@ class InstBase:
                     val1.append(-1e-30)
 
         return val1
-

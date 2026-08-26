@@ -13,7 +13,7 @@ INSTRUMENT_FACTORIES = {
 class InstrumentFinder(QThread):
     """Run blocking VISA discovery outside the GUI thread."""
 
-    found = Signal(str)
+    found = Signal(str, str)
     not_found = Signal()
     failed = Signal(str)
 
@@ -24,9 +24,13 @@ class InstrumentFinder(QThread):
     def run(self):
         try:
             factory = INSTRUMENT_FACTORIES[self.instrument_type]
-            resource = factory().find_inst()
+            instrument = factory()
+            resource = instrument.find_inst()
             if resource:
-                self.found.emit(str(resource))
+                self.found.emit(
+                    str(resource),
+                    str(getattr(instrument, "found_idn", "") or ""),
+                )
             else:
                 self.not_found.emit()
         except Exception as exc:

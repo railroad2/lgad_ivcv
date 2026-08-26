@@ -7,12 +7,16 @@ from lgad_ivcv.gui.instrument_finder import InstrumentFinder
 class InstrumentFinderTests(unittest.TestCase):
     def test_found_resource_is_emitted(self):
         class FakeInstrument:
+            found_idn = "KEITHLEY INSTRUMENTS INC.,MODEL 2400"
+
             def find_inst(self):
                 return "ASRL/dev/ttyUSB0::INSTR"
 
         finder = InstrumentFinder("smu")
         found = []
-        finder.found.connect(found.append)
+        finder.found.connect(
+            lambda resource, identity: found.append((resource, identity))
+        )
 
         with patch.dict(
             "lgad_ivcv.gui.instrument_finder.INSTRUMENT_FACTORIES",
@@ -20,7 +24,15 @@ class InstrumentFinderTests(unittest.TestCase):
         ):
             finder.run()
 
-        self.assertEqual(found, ["ASRL/dev/ttyUSB0::INSTR"])
+        self.assertEqual(
+            found,
+            [
+                (
+                    "ASRL/dev/ttyUSB0::INSTR",
+                    "KEITHLEY INSTRUMENTS INC.,MODEL 2400",
+                )
+            ],
+        )
 
     def test_not_found_is_emitted(self):
         class FakeInstrument:

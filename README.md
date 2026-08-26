@@ -156,3 +156,7 @@ produced.
 CLI dry-run scripts do not publish measurement progress to the web monitor.
 The `iv_once.py` and `cv_once.py` scripts do not support `--dryrun` because they
 run without switching-matrix channel selection.
+
+## Acknowledgements
+
+Development of this project was assisted by OpenAI Codex.

@@ -1,6 +1,7 @@
 import os
 import re
 import tempfile
+import time
 import unittest
 from datetime import datetime
 from pathlib import Path
@@ -532,6 +533,15 @@ class MainWindowTests(unittest.TestCase):
         self.assertEqual(group_titles.count("Switching matrix"), 2)
         self.assertEqual(group_titles.count("Instruments"), 2)
         self.assertNotIn("Instrument connection", group_titles)
+        self.assertEqual(
+            [
+                window.smu_find_button.text(),
+                window.pau_find_button.text(),
+                window.cv_lcr_find_button.text(),
+                window.cv_pau_find_button.text(),
+            ],
+            ["Find", "Find", "Find", "Find"],
+        )
         self.assertIn(
             window.matrix_status_label.text(),
             ("Checking...", "Disconnected"),
@@ -545,6 +555,33 @@ class MainWindowTests(unittest.TestCase):
         self.assertEqual(window.matrix_status_label.text(), "Connected")
         window.port_edit.setText("ws://another-matrix:8765")
         self.assertEqual(window.matrix_status_label.text(), "Checking...")
+
+        window.close()
+
+    def test_find_button_populates_visa_resource(self):
+        class FakeSMU:
+            def find_inst(self):
+                return "ASRL/dev/ttyUSB0::INSTR"
+
+        window = MainWindow()
+        with patch.dict(
+            "lgad_ivcv.gui.instrument_finder.INSTRUMENT_FACTORIES",
+            {"smu": FakeSMU},
+        ):
+            window.smu_find_button.click()
+            deadline = time.monotonic() + 2.0
+            while (
+                window._instrument_search is not None
+                and time.monotonic() < deadline
+            ):
+                self.app.processEvents()
+
+        self.assertIsNone(window._instrument_search)
+        self.assertEqual(
+            window.smu_edit.text(),
+            "ASRL/dev/ttyUSB0::INSTR",
+        )
+        self.assertIn("Found SMU", window.log_edit.toPlainText())
 
         window.close()
 

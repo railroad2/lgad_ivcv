@@ -37,6 +37,7 @@ from ..ivcv.config import (
 )
 from .channel_grid import ChannelGrid
 from .cv_worker import CVRunConfig, CVWorker
+from .instrument_finder import InstrumentFinder
 from .iv_worker import IVRunConfig, IVWorker
 from .matrix_monitor import MatrixConnectionMonitor
 
@@ -67,6 +68,7 @@ class MainWindow(QMainWindow):
         self._cv_log_file_path = None
         self._channel_window_shown = False
         self._matrix_monitors = []
+        self._instrument_search = None
 
         self._build_ui()
         self.measurement_mode_combo.currentIndexChanged.connect(
@@ -170,11 +172,27 @@ class MainWindow(QMainWindow):
         instruments_form = QFormLayout(instruments)
         self.cv_lcr_edit = QLineEdit()
         self.cv_lcr_edit.setPlaceholderText("Leave blank for automatic discovery")
+        self.cv_lcr_find_button = QPushButton("Find")
+        self.cv_lcr_find_button.setFixedWidth(55)
+        self.cv_lcr_find_button.clicked.connect(
+            lambda: self._start_instrument_search("cv_lcr")
+        )
         self.cv_pau_edit = QLineEdit()
         self.cv_pau_edit.setPlaceholderText("Optional external bias source")
+        self.cv_pau_find_button = QPushButton("Find")
+        self.cv_pau_find_button.setFixedWidth(55)
+        self.cv_pau_find_button.clicked.connect(
+            lambda: self._start_instrument_search("cv_pau")
+        )
         self.cv_dry_run_check = QCheckBox("Dry run")
-        instruments_form.addRow("LCR VISA resource", self.cv_lcr_edit)
-        instruments_form.addRow("PAU VISA resource", self.cv_pau_edit)
+        cv_lcr_row = QHBoxLayout()
+        cv_lcr_row.addWidget(self.cv_lcr_edit, 1)
+        cv_lcr_row.addWidget(self.cv_lcr_find_button)
+        cv_pau_row = QHBoxLayout()
+        cv_pau_row.addWidget(self.cv_pau_edit, 1)
+        cv_pau_row.addWidget(self.cv_pau_find_button)
+        instruments_form.addRow("LCR VISA resource", cv_lcr_row)
+        instruments_form.addRow("PAU VISA resource", cv_pau_row)
         instruments_form.addRow("", self.cv_dry_run_check)
 
         connection_layout.addWidget(switching_matrix)
@@ -324,11 +342,27 @@ class MainWindow(QMainWindow):
         instruments_form = QFormLayout(instruments)
         self.smu_edit = QLineEdit()
         self.smu_edit.setPlaceholderText("Leave blank for automatic discovery")
+        self.smu_find_button = QPushButton("Find")
+        self.smu_find_button.setFixedWidth(55)
+        self.smu_find_button.clicked.connect(
+            lambda: self._start_instrument_search("iv_smu")
+        )
         self.pau_edit = QLineEdit()
         self.pau_edit.setPlaceholderText("Leave blank for automatic discovery")
+        self.pau_find_button = QPushButton("Find")
+        self.pau_find_button.setFixedWidth(55)
+        self.pau_find_button.clicked.connect(
+            lambda: self._start_instrument_search("iv_pau")
+        )
         self.dry_run_check = QCheckBox("Dry run")
-        instruments_form.addRow("SMU VISA resource", self.smu_edit)
-        instruments_form.addRow("PAU VISA resource", self.pau_edit)
+        smu_row = QHBoxLayout()
+        smu_row.addWidget(self.smu_edit, 1)
+        smu_row.addWidget(self.smu_find_button)
+        pau_row = QHBoxLayout()
+        pau_row.addWidget(self.pau_edit, 1)
+        pau_row.addWidget(self.pau_find_button)
+        instruments_form.addRow("SMU VISA resource", smu_row)
+        instruments_form.addRow("PAU VISA resource", pau_row)
         instruments_form.addRow("", self.dry_run_check)
 
         connection_layout.addWidget(switching_matrix)
@@ -453,6 +487,91 @@ class MainWindow(QMainWindow):
         for monitor in self._matrix_monitors:
             monitor.stop()
         self._matrix_monitors.clear()
+
+    def _instrument_search_specification(self, key):
+        return {
+            "iv_smu": ("smu", "SMU", self.smu_edit, self._append_log),
+            "iv_pau": ("pau", "PAU", self.pau_edit, self._append_log),
+            "cv_lcr": ("lcr", "LCR meter", self.cv_lcr_edit, self._append_cv_log),
+            "cv_pau": ("pau", "PAU", self.cv_pau_edit, self._append_cv_log),
+        }[key]
+
+    def _instrument_find_buttons(self):
+        return (
+            self.smu_find_button,
+            self.pau_find_button,
+            self.cv_lcr_find_button,
+            self.cv_pau_find_button,
+        )
+
+    def _start_instrument_search(self, key):
+        if self._worker is not None or self._instrument_search is not None:
+            return
+
+        instrument_type, name, _field, logger = (
+            self._instrument_search_specification(key)
+        )
+        logger(f"Searching for {name} VISA resource...")
+        self.statusBar().showMessage(f"Searching for {name} VISA resource...")
+        for button in self._instrument_find_buttons():
+            button.setEnabled(False)
+        self.start_button.setEnabled(False)
+        self.cv_start_button.setEnabled(False)
+
+        thread = QThread(self)
+        finder = InstrumentFinder(instrument_type)
+        finder.moveToThread(thread)
+        thread.started.connect(finder.run)
+        finder.found.connect(
+            lambda resource: self._instrument_found(key, resource)
+        )
+        finder.not_found.connect(lambda: self._instrument_not_found(key))
+        finder.failed.connect(
+            lambda message: self._instrument_find_failed(key, message)
+        )
+        finder.finished.connect(thread.quit)
+        thread.finished.connect(finder.deleteLater)
+        thread.finished.connect(self._instrument_search_finished)
+
+        self._instrument_search = (thread, finder)
+        thread.start()
+
+    def _instrument_found(self, key, resource):
+        _instrument_type, name, field, logger = (
+            self._instrument_search_specification(key)
+        )
+        field.setText(resource)
+        logger(f"Found {name}: {resource}")
+        self.statusBar().showMessage(f"Found {name}: {resource}")
+
+    def _instrument_not_found(self, key):
+        _instrument_type, name, _field, logger = (
+            self._instrument_search_specification(key)
+        )
+        message = f"No compatible {name} VISA resource was found."
+        logger(message)
+        self.statusBar().showMessage(message)
+        QMessageBox.warning(self, "Instrument not found", message)
+
+    def _instrument_find_failed(self, key, error):
+        _instrument_type, name, _field, logger = (
+            self._instrument_search_specification(key)
+        )
+        message = f"Failed to search for {name}: {error}"
+        logger(message)
+        self.statusBar().showMessage(message)
+        QMessageBox.critical(self, "Instrument search failed", message)
+
+    def _instrument_search_finished(self):
+        search = self._instrument_search
+        self._instrument_search = None
+        if search is not None:
+            search[0].deleteLater()
+        if self._worker is None:
+            self.start_button.setEnabled(True)
+            self.cv_start_button.setEnabled(True)
+            for button in self._instrument_find_buttons():
+                button.setEnabled(True)
 
     @staticmethod
     def _voltage_spin(value):
@@ -1143,7 +1262,9 @@ class MainWindow(QMainWindow):
             self.browse_button,
             self.cv_port_edit,
             self.cv_lcr_edit,
+            self.cv_lcr_find_button,
             self.cv_pau_edit,
+            self.cv_pau_find_button,
             self.cv_dry_run_check,
             self.cv_measurement_mode_combo,
             self.cv_sensor_edit,
@@ -1160,6 +1281,8 @@ class MainWindow(QMainWindow):
             self.clear_all_button,
             self.open_channels_button,
             self.cv_open_channels_button,
+            self.smu_find_button,
+            self.pau_find_button,
         ):
             widget.setEnabled(not running)
 
@@ -1310,6 +1433,14 @@ class MainWindow(QMainWindow):
             self._show_channel_window()
 
     def closeEvent(self, event: QCloseEvent):
+        if self._instrument_search is not None:
+            QMessageBox.information(
+                self,
+                "Instrument search in progress",
+                "Wait for the VISA resource search to finish before closing.",
+            )
+            event.ignore()
+            return
         if self._worker is not None:
             if self._active_measurement == "cv":
                 self._stop_cv_measurement()

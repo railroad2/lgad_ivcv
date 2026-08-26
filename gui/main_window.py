@@ -38,6 +38,7 @@ from ..ivcv.config import (
 from .channel_grid import ChannelGrid
 from .cv_worker import CVRunConfig, CVWorker
 from .iv_worker import IVRunConfig, IVWorker
+from .matrix_monitor import MatrixConnectionMonitor
 
 
 class MainWindow(QMainWindow):
@@ -65,6 +66,7 @@ class MainWindow(QMainWindow):
         self._log_file_path = None
         self._cv_log_file_path = None
         self._channel_window_shown = False
+        self._matrix_monitors = []
 
         self._build_ui()
         self.measurement_mode_combo.currentIndexChanged.connect(
@@ -86,17 +88,14 @@ class MainWindow(QMainWindow):
         self.result_path_edit.textChanged.connect(self._update_output_paths)
         self.sensor_edit.textChanged.connect(self._update_output_paths)
         self.cv_sensor_edit.textChanged.connect(self._update_output_paths)
-        self.port_edit.textChanged.connect(
-            lambda: self._set_iv_matrix_status("Disconnected")
-        )
-        self.cv_port_edit.textChanged.connect(
-            lambda: self._set_cv_matrix_status("Disconnected")
-        )
+        self.port_edit.textChanged.connect(self._iv_matrix_address_changed)
+        self.cv_port_edit.textChanged.connect(self._cv_matrix_address_changed)
         self.measurement_tabs.currentChanged.connect(self._measurement_tab_changed)
         self._load_settings()
         self._update_output_paths()
         self._measurement_tab_changed(self.measurement_tabs.currentIndex())
         self._set_running(False)
+        self._start_matrix_monitors()
 
     def _build_ui(self):
         central = QWidget()
@@ -405,8 +404,7 @@ class MainWindow(QMainWindow):
     def _set_matrix_status(label, status):
         colors = {
             "Connected": "#18763a",
-            "Connecting...": "#9a6700",
-            "Connection failed": "#b00020",
+            "Checking...": "#9a6700",
             "Disconnected": "#666666",
         }
         label.setText(status)
@@ -419,6 +417,42 @@ class MainWindow(QMainWindow):
 
     def _set_cv_matrix_status(self, status):
         self._set_matrix_status(self.cv_matrix_status_label, status)
+
+    def _start_matrix_monitors(self):
+        specifications = (
+            (self.port_edit, self._set_iv_monitored_status),
+            (self.cv_port_edit, self._set_cv_monitored_status),
+        )
+        for address_edit, status_slot in specifications:
+            monitor = MatrixConnectionMonitor(address_edit.text())
+            monitor.status_changed.connect(status_slot, Qt.QueuedConnection)
+            self._matrix_monitors.append(monitor)
+            monitor.start()
+
+    def _set_iv_monitored_status(self, address, status):
+        if address.strip() == self.port_edit.text().strip():
+            self._set_iv_matrix_status(status)
+
+    def _set_cv_monitored_status(self, address, status):
+        if address.strip() == self.cv_port_edit.text().strip():
+            self._set_cv_matrix_status(status)
+
+    def _iv_matrix_address_changed(self, address):
+        self._set_iv_matrix_status("Checking...")
+        if self._matrix_monitors:
+            self._matrix_monitors[0].set_control_uri(address)
+
+    def _cv_matrix_address_changed(self, address):
+        self._set_cv_matrix_status("Checking...")
+        if len(self._matrix_monitors) > 1:
+            self._matrix_monitors[1].set_control_uri(address)
+
+    def _stop_matrix_monitors(self):
+        for monitor in self._matrix_monitors:
+            monitor.request_stop()
+        for monitor in self._matrix_monitors:
+            monitor.stop()
+        self._matrix_monitors.clear()
 
     @staticmethod
     def _voltage_spin(value):
@@ -729,7 +763,6 @@ class MainWindow(QMainWindow):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.status_changed.connect(self.statusBar().showMessage)
-        worker.matrix_status_changed.connect(self._set_iv_matrix_status)
         worker.log_message.connect(self._append_log)
         worker.target_started.connect(self._target_started)
         worker.target_completed.connect(self._target_completed)
@@ -746,7 +779,6 @@ class MainWindow(QMainWindow):
         self._worker = worker
         self._active_measurement = "iv"
         self._set_running(True, "iv")
-        self._set_iv_matrix_status("Connecting...")
         self._show_live_iv_window()
         plural = self.MODE_LABELS[config.measurement_mode][1]
         self._append_log(
@@ -781,7 +813,6 @@ class MainWindow(QMainWindow):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.status_changed.connect(self.statusBar().showMessage)
-        worker.matrix_status_changed.connect(self._set_cv_matrix_status)
         worker.log_message.connect(self._append_cv_log)
         worker.target_started.connect(self._cv_target_started)
         worker.target_completed.connect(self._cv_target_completed)
@@ -798,7 +829,6 @@ class MainWindow(QMainWindow):
         self._worker = worker
         self._active_measurement = "cv"
         self._set_running(True, "cv")
-        self._set_cv_matrix_status("Connecting...")
         self._show_live_cv_window()
         self._append_cv_log(
             f"CV measurement started: {len(config.targets)} "
@@ -1293,6 +1323,7 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         self._save_settings()
+        self._stop_matrix_monitors()
         self.channel_window.close()
         self.live_iv_window.close()
         self.live_cv_window.close()

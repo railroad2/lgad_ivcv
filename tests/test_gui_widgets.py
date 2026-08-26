@@ -265,11 +265,9 @@ class IVWorkerTests(unittest.TestCase):
                 points = []
                 completions = []
                 result_paths = []
-                matrix_statuses = []
                 worker.point_measured.connect(lambda *args: points.append(args))
                 worker.completed.connect(lambda *args: completions.append(args))
                 worker.result_path_ready.connect(result_paths.append)
-                worker.matrix_status_changed.connect(matrix_statuses.append)
 
                 with patch("lgad_ivcv.gui.iv_worker.IV_sw", FakeIVRunner):
                     worker.run()
@@ -283,10 +281,6 @@ class IVWorkerTests(unittest.TestCase):
                     [(False, "/tmp/result/measurement")],
                 )
                 self.assertEqual(result_paths, ["/tmp/result/measurement"])
-                self.assertEqual(
-                    matrix_statuses,
-                    ["Connecting...", "Connected", "Disconnected"],
-                )
                 statuses = FakeIVRunner.last_instance.swm.statuses
                 self.assertEqual(
                     [status["status"] for status in statuses],
@@ -324,11 +318,9 @@ class CVWorkerTests(unittest.TestCase):
                 points = []
                 starts = []
                 completions = []
-                matrix_statuses = []
                 worker.point_measured.connect(lambda *args: points.append(args))
                 worker.target_started.connect(lambda *args: starts.append(args))
                 worker.completed.connect(lambda *args: completions.append(args))
-                worker.matrix_status_changed.connect(matrix_statuses.append)
 
                 with patch("lgad_ivcv.gui.cv_worker.CV_sw", FakeCVRunner):
                     worker.run()
@@ -341,10 +333,6 @@ class CVWorkerTests(unittest.TestCase):
                 self.assertEqual(
                     completions,
                     [(False, "/tmp/result/measurement")],
-                )
-                self.assertEqual(
-                    matrix_statuses,
-                    ["Connecting...", "Connected", "Disconnected"],
                 )
                 statuses = FakeCVRunner.last_instance.swm.statuses
                 self.assertEqual(
@@ -544,13 +532,19 @@ class MainWindowTests(unittest.TestCase):
         self.assertEqual(group_titles.count("Switching matrix"), 2)
         self.assertEqual(group_titles.count("Instruments"), 2)
         self.assertNotIn("Instrument connection", group_titles)
-        self.assertEqual(window.matrix_status_label.text(), "Disconnected")
-        self.assertEqual(window.cv_matrix_status_label.text(), "Disconnected")
+        self.assertIn(
+            window.matrix_status_label.text(),
+            ("Checking...", "Disconnected"),
+        )
+        self.assertIn(
+            window.cv_matrix_status_label.text(),
+            ("Checking...", "Disconnected"),
+        )
 
         window._set_iv_matrix_status("Connected")
         self.assertEqual(window.matrix_status_label.text(), "Connected")
         window.port_edit.setText("ws://another-matrix:8765")
-        self.assertEqual(window.matrix_status_label.text(), "Disconnected")
+        self.assertEqual(window.matrix_status_label.text(), "Checking...")
 
         window.close()
 

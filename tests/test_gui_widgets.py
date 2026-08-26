@@ -649,6 +649,37 @@ class MainWindowTests(unittest.TestCase):
         window.close()
         QSettings().clear()
 
+    def test_visa_resources_are_not_persisted_in_qsettings(self):
+        settings = QSettings()
+        for key in MainWindow.VISA_RESOURCE_SETTING_KEYS:
+            settings.setValue(key, "ASRL/dev/ttyUSB9::INSTR")
+
+        window = MainWindow()
+
+        self.assertEqual(window.smu_edit.text(), "")
+        self.assertEqual(window.pau_edit.text(), "")
+        self.assertEqual(window.cv_lcr_edit.text(), "")
+        self.assertEqual(window.cv_pau_edit.text(), "")
+        self.assertTrue(
+            all(
+                not settings.contains(key)
+                for key in MainWindow.VISA_RESOURCE_SETTING_KEYS
+            )
+        )
+
+        window.smu_edit.setText("ASRL/dev/ttyUSB0::INSTR")
+        window.cv_lcr_edit.setText("ASRL/dev/ttyUSB1::INSTR")
+        window._save_settings()
+        self.assertTrue(
+            all(
+                not settings.contains(key)
+                for key in MainWindow.VISA_RESOURCE_SETTING_KEYS
+            )
+        )
+
+        window.close()
+        settings.clear()
+
     def test_channel_window_title_does_not_follow_measurement_mode(self):
         window = MainWindow()
         expected_title = "Measurement channels"

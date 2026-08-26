@@ -43,6 +43,7 @@ from .matrix_monitor import MatrixConnectionMonitor
 
 
 class MainWindow(QMainWindow):
+    VISA_RESOURCE_SETTING_KEYS = ("iv/smu", "iv/pau", "cv/lcr", "cv/pau")
     MODE_LABELS = {
         "channel": ("Channel", "channels"),
         "row": ("Row", "rows"),
@@ -1336,12 +1337,14 @@ class MainWindow(QMainWindow):
             widget.setEnabled(not running)
 
     def _load_settings(self):
+        for key in self.VISA_RESOURCE_SETTING_KEYS:
+            self._settings.remove(key)
         if SWITCHING_MATRIX_URI_ENV not in os.environ:
             self.port_edit.setText(
                 self._settings.value("iv/port", resolve_switching_matrix_uri())
             )
-        self.smu_edit.setText(self._settings.value("iv/smu", ""))
-        self.pau_edit.setText(self._settings.value("iv/pau", ""))
+        self.smu_edit.clear()
+        self.pau_edit.clear()
         sensor_name = self._settings.value("sensor_name")
         if sensor_name is None:
             sensor_name = self._settings.value(
@@ -1384,8 +1387,8 @@ class MainWindow(QMainWindow):
             self.cv_port_edit.setText(
                 self._settings.value("cv/port", resolve_switching_matrix_uri())
             )
-        self.cv_lcr_edit.setText(self._settings.value("cv/lcr", ""))
-        self.cv_pau_edit.setText(self._settings.value("cv/pau", ""))
+        self.cv_lcr_edit.clear()
+        self.cv_pau_edit.clear()
         self.cv_start_voltage_spin.setValue(
             self._settings.value("cv/start_voltage", 0.0, type=float)
         )
@@ -1430,8 +1433,8 @@ class MainWindow(QMainWindow):
 
     def _save_settings(self):
         self._settings.setValue("iv/port", self.port_edit.text())
-        self._settings.setValue("iv/smu", self.smu_edit.text())
-        self._settings.setValue("iv/pau", self.pau_edit.text())
+        for key in self.VISA_RESOURCE_SETTING_KEYS:
+            self._settings.remove(key)
         self._settings.setValue("sensor_name", self.sensor_edit.text())
         self._settings.remove("iv/sensor")
         self._settings.remove("cv/sensor")
@@ -1451,8 +1454,6 @@ class MainWindow(QMainWindow):
         self._settings.remove("iv/measurement_mode")
         self._settings.remove("cv/measurement_mode")
         self._settings.setValue("cv/port", self.cv_port_edit.text())
-        self._settings.setValue("cv/lcr", self.cv_lcr_edit.text())
-        self._settings.setValue("cv/pau", self.cv_pau_edit.text())
         self._settings.setValue(
             "cv/start_voltage", self.cv_start_voltage_spin.value()
         )

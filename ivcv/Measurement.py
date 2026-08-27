@@ -241,23 +241,16 @@ class Measurement:
     def _measure(self):
         self.measurement_in_progress = True
         try:
-            last_voltage = 0
             for index, voltage in enumerate(self.voltage_array):
                 self._update_measurement_array(voltage, index)
 
                 if self.event.is_set():  # flag in Event is set when measurement is stopped
-                    last_voltage = voltage
                     break
-
-            # Start a forced return sweep if the measurement was stopped.
-            if self.event.is_set() and last_voltage < 0:
-                self._make_voltage_array(last_voltage, 0, False)
-
-                for index, voltage in enumerate(self.voltage_array):
-                    self._update_measurement_array(voltage, index, True)
         finally:
-            # This is deliberately independent of the result-saving callback:
-            # callbacks are skipped when a measurement thread raises.
+            # Use the instrument-specific fast ramp-down instead of measuring
+            # every point on a forced return sweep.  This is deliberately
+            # independent of the result-saving callback: callbacks are skipped
+            # when a measurement thread raises.
             try:
                 self._ensure_output_off()
             except Exception as exc:

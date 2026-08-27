@@ -56,6 +56,24 @@ def fail_measurement(*_args, **_kwargs):
 
 
 class MeasurementSafetyTest(unittest.TestCase):
+    def test_stop_uses_fast_shutdown_without_forced_return_measurements(self):
+        measurement = IVMeasurement()
+        measurement.smu = FakeSMU()
+        measurement.voltage_array = np.array([-100, -101])
+        measured_points = []
+
+        def stop_after_first_point(voltage, index, is_forced_return=False):
+            measured_points.append((voltage, index, is_forced_return))
+            measurement.event.set()
+
+        measurement._update_measurement_array = stop_after_first_point
+
+        measurement._measure()
+
+        self.assertEqual(measured_points, [(-100, 0, False)])
+        self.assertIn(("set_voltage_ramp", 0), measurement.smu.calls)
+        self.assertEqual(measurement.smu.calls[-1], ("set_output", "off"))
+
     def test_iv_failure_sets_zero_and_turns_output_off(self):
         measurement = IVMeasurement()
         measurement.smu = FakeSMU()

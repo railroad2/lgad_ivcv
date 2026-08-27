@@ -121,7 +121,7 @@ class MainWindow(QMainWindow):
             "Measurement channels", self._build_channel_panel(), 575, 540
         )
         self.live_iv_window = self._create_auxiliary_window(
-            "Live IV", self._build_live_iv_panel(), 760, 600
+            "Live IV", self._build_live_iv_panel(), 760, 700
         )
         self.live_cv_window = self._create_auxiliary_window(
             "Live CV", self._build_live_cv_panel(), 760, 700
@@ -648,20 +648,27 @@ class MainWindow(QMainWindow):
     def _build_live_iv_panel(self):
         panel = QWidget()
         layout = QVBoxLayout(panel)
-        self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setLabel("bottom", "Bias voltage", units="V")
-        self.plot_widget.setLabel("left", "Current", units="A")
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        self.plot_widget.addLegend()
-        self.pau_curve = self.plot_widget.plot(
-            pen=pg.mkPen("#3daee9", width=2), name="PAU"
+        self.pau_plot_widget = pg.PlotWidget()
+        self.pau_plot_widget.setLabel("bottom", "Bias voltage", units="V")
+        self.pau_plot_widget.setLabel("left", "PAU current", units="A")
+        self.pau_plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        self.pau_curve = self.pau_plot_widget.plot(
+            pen=pg.mkPen("#3daee9", width=2)
         )
-        self.smu_curve = self.plot_widget.plot(
-            pen=pg.mkPen("#e6a23c", width=2), name="SMU"
+        self.smu_plot_widget = pg.PlotWidget()
+        self.smu_plot_widget.setLabel("bottom", "Bias voltage", units="V")
+        self.smu_plot_widget.setLabel("left", "SMU current", units="A")
+        self.smu_plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        self.smu_curve = self.smu_plot_widget.plot(
+            pen=pg.mkPen("#e6a23c", width=2)
         )
+        # Retain the original attribute for compatibility with callers that use
+        # it to locate the live IV window.
+        self.plot_widget = self.pau_plot_widget
         self.log_scale_check = QCheckBox("Log Y axis (absolute values)")
         self.log_scale_check.toggled.connect(self._refresh_plot)
-        layout.addWidget(self.plot_widget, 1)
+        layout.addWidget(self.pau_plot_widget, 1)
+        layout.addWidget(self.smu_plot_widget, 1)
         layout.addWidget(self.log_scale_check)
         return panel
 
@@ -1131,7 +1138,9 @@ class MainWindow(QMainWindow):
         if self.log_scale_check.isChecked():
             pau = np.abs(pau)
             smu = np.abs(smu)
-        self.plot_widget.setLogMode(y=self.log_scale_check.isChecked())
+        log_mode = self.log_scale_check.isChecked()
+        self.pau_plot_widget.setLogMode(y=log_mode)
+        self.smu_plot_widget.setLogMode(y=log_mode)
         self.pau_curve.setData(self._plot_voltage, pau)
         self.smu_curve.setData(self._plot_voltage, smu)
 

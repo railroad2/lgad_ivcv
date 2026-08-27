@@ -415,6 +415,15 @@ class MainWindowTests(unittest.TestCase):
         self.assertTrue(window.live_cv_window.isWindow())
         self.assertIsNot(window.channel_grid.window(), window)
         self.assertIsNot(window.plot_widget.window(), window)
+        self.assertIsNot(window.pau_plot_widget, window.smu_plot_widget)
+        self.assertIn(
+            window.pau_curve,
+            window.pau_plot_widget.getPlotItem().listDataItems(),
+        )
+        self.assertIn(
+            window.smu_curve,
+            window.smu_plot_widget.getPlotItem().listDataItems(),
+        )
         self.assertIs(window.log_edit.window(), window)
         self.assertFalse(window.live_iv_window.isVisible())
         self.assertFalse(window.live_cv_window.isVisible())

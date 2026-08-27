@@ -444,6 +444,34 @@ class MainWindowTests(unittest.TestCase):
 
         window.close()
 
+    def test_cv_pau_enable_controls_resource_and_config(self):
+        QSettings().remove("cv/pau_enabled")
+        window = MainWindow()
+
+        self.assertFalse(window.cv_pau_enable_check.isChecked())
+        self.assertFalse(window.cv_pau_edit.isEnabled())
+        self.assertFalse(window.cv_pau_find_button.isEnabled())
+        self.assertIsNone(window._make_cv_config().pau_resource)
+
+        window.cv_pau_enable_check.setChecked(True)
+        self.assertTrue(window.cv_pau_edit.isEnabled())
+        self.assertTrue(window.cv_pau_find_button.isEnabled())
+        with self.assertRaisesRegex(ValueError, "Enter a PAU VISA resource"):
+            window._make_cv_config()
+
+        window.cv_pau_edit.setText("ASRL/dev/ttyUSB1::INSTR")
+        self.assertEqual(
+            window._make_cv_config().pau_resource,
+            "ASRL/dev/ttyUSB1::INSTR",
+        )
+
+        window.cv_pau_enable_check.setChecked(False)
+        self.assertFalse(window.cv_pau_edit.isEnabled())
+        self.assertFalse(window.cv_pau_find_button.isEnabled())
+        self.assertIsNone(window._make_cv_config().pau_resource)
+
+        window.close()
+
     def test_cv_tab_selects_rows_and_columns_as_measurement_targets(self):
         window = MainWindow()
         window.measurement_tabs.setCurrentIndex(1)

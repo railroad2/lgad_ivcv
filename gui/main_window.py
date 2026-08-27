@@ -178,6 +178,11 @@ class MainWindow(QMainWindow):
         self.cv_lcr_find_button.clicked.connect(self._find_cv_lcr)
         self.cv_pau_edit = QLineEdit()
         self.cv_pau_edit.setPlaceholderText("Optional external bias source")
+        self.cv_pau_enable_check = QCheckBox("Enable PAU")
+        self.cv_pau_enable_check.setChecked(False)
+        self.cv_pau_enable_check.toggled.connect(
+            self._cv_pau_enabled_changed
+        )
         self.cv_pau_find_button = QPushButton("Find")
         self.cv_pau_find_button.setFixedWidth(55)
         self.cv_pau_find_button.clicked.connect(self._find_cv_pau)
@@ -189,8 +194,10 @@ class MainWindow(QMainWindow):
         cv_pau_row.addWidget(self.cv_pau_edit, 1)
         cv_pau_row.addWidget(self.cv_pau_find_button)
         instruments_form.addRow("LCR VISA resource", cv_lcr_row)
+        instruments_form.addRow("", self.cv_pau_enable_check)
         instruments_form.addRow("PAU VISA resource", cv_pau_row)
         instruments_form.addRow("", self.cv_dry_run_check)
+        self._cv_pau_enabled_changed(False)
 
         connection_layout.addWidget(switching_matrix)
         connection_layout.addWidget(instruments)
@@ -509,6 +516,15 @@ class MainWindow(QMainWindow):
     def _find_cv_pau(self):
         self._start_instrument_search("cv_pau")
 
+    def _cv_pau_enabled_changed(self, enabled):
+        controls_enabled = (
+            bool(enabled)
+            and self._worker is None
+            and self._instrument_search is None
+        )
+        self.cv_pau_edit.setEnabled(controls_enabled)
+        self.cv_pau_find_button.setEnabled(controls_enabled)
+
     def _start_instrument_search(self, key):
         if self._worker is not None or self._instrument_search is not None:
             return
@@ -584,6 +600,9 @@ class MainWindow(QMainWindow):
             self.cv_start_button.setEnabled(True)
             for button in self._instrument_find_buttons():
                 button.setEnabled(True)
+            self._cv_pau_enabled_changed(
+                self.cv_pau_enable_check.isChecked()
+            )
 
     @staticmethod
     def _voltage_spin(value):
@@ -843,11 +862,18 @@ class MainWindow(QMainWindow):
         end_voltage = self.cv_end_voltage_spin.value()
         if start_voltage > 0 or end_voltage > 0:
             raise ValueError("CV bias voltage must be 0 V or below.")
-        pau_resource = self._optional_text(self.cv_pau_edit)
-        if pau_resource is None and min(start_voltage, end_voltage) < -40:
+        pau_enabled = self.cv_pau_enable_check.isChecked()
+        pau_resource = (
+            self._optional_text(self.cv_pau_edit) if pau_enabled else None
+        )
+        if pau_enabled and pau_resource is None:
+            raise ValueError(
+                "Enter a PAU VISA resource or use Find when PAU is enabled."
+            )
+        if not pau_enabled and min(start_voltage, end_voltage) < -40:
             raise ValueError(
                 "The LCR internal bias is limited to -40 V. "
-                "Enter a PAU resource for a larger negative bias."
+                "Enable PAU for a larger negative bias."
             )
 
         return CVRunConfig(
@@ -1317,6 +1343,7 @@ class MainWindow(QMainWindow):
             self.cv_port_edit,
             self.cv_lcr_edit,
             self.cv_lcr_find_button,
+            self.cv_pau_enable_check,
             self.cv_pau_edit,
             self.cv_pau_find_button,
             self.cv_dry_run_check,
@@ -1339,6 +1366,10 @@ class MainWindow(QMainWindow):
             self.pau_find_button,
         ):
             widget.setEnabled(not running)
+        if not running:
+            self._cv_pau_enabled_changed(
+                self.cv_pau_enable_check.isChecked()
+            )
 
     def _load_settings(self):
         for key in self.VISA_RESOURCE_SETTING_KEYS:
@@ -1393,6 +1424,9 @@ class MainWindow(QMainWindow):
             )
         self.cv_lcr_edit.clear()
         self.cv_pau_edit.clear()
+        self.cv_pau_enable_check.setChecked(
+            self._settings.value("cv/pau_enabled", False, type=bool)
+        )
         self.cv_start_voltage_spin.setValue(
             self._settings.value("cv/start_voltage", 0.0, type=float)
         )
@@ -1458,6 +1492,10 @@ class MainWindow(QMainWindow):
         self._settings.remove("iv/measurement_mode")
         self._settings.remove("cv/measurement_mode")
         self._settings.setValue("cv/port", self.cv_port_edit.text())
+        self._settings.setValue(
+            "cv/pau_enabled",
+            self.cv_pau_enable_check.isChecked(),
+        )
         self._settings.setValue(
             "cv/start_voltage", self.cv_start_voltage_spin.value()
         )

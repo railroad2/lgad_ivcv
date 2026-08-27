@@ -888,6 +888,7 @@ class MainWindow(QMainWindow):
         self.channel_progress.setValue(0)
         self.point_progress.setRange(0, 1)
         self.point_progress.setValue(0)
+        self.channel_grid.clear_completed()
 
         thread = QThread(self)
         worker = IVWorker(config)
@@ -941,6 +942,7 @@ class MainWindow(QMainWindow):
         self.cv_channel_progress.setValue(0)
         self.cv_point_progress.setRange(0, 1)
         self.cv_point_progress.setValue(0)
+        self.channel_grid.clear_completed()
 
         thread = QThread(self)
         worker = CVWorker(config)
@@ -1051,6 +1053,7 @@ class MainWindow(QMainWindow):
 
     def _target_completed(self, mode, target, index, total):
         self.channel_progress.setValue(index + 1)
+        self.channel_grid.mark_completed(mode, target)
         singular = self.MODE_LABELS[mode][0]
         self._append_log(f"{singular} {target} measurement completed.")
 
@@ -1070,6 +1073,7 @@ class MainWindow(QMainWindow):
 
     def _cv_target_completed(self, mode, target, index, total):
         self.cv_channel_progress.setValue(index + 1)
+        self.channel_grid.mark_completed(mode, target)
         singular = self.MODE_LABELS[mode][0]
         self._append_cv_log(f"{singular} {target} CV measurement completed.")
 

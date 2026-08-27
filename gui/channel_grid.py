@@ -1,5 +1,12 @@
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QFrame, QGridLayout, QPushButton, QToolButton, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QLabel,
+    QPushButton,
+    QToolButton,
+    QWidget,
+)
 
 
 class ChannelGrid(QWidget):
@@ -15,6 +22,7 @@ class ChannelGrid(QWidget):
             "QToolButton:checked { background-color: #2878b5; color: white; }"
         )
         self._buttons = []
+        self._completion_marks = []
         self._row_headers = []
         self._col_headers = []
         self._selection_mode = "channel"
@@ -55,6 +63,7 @@ class ChannelGrid(QWidget):
             self._row_headers.append(header)
 
             row_buttons = []
+            row_marks = []
             for col in range(16):
                 channel = row * 16 + col
                 button = QToolButton()
@@ -70,9 +79,57 @@ class ChannelGrid(QWidget):
                 button.setToolTip(
                     f"row {row_label}, column {col:02d}, channel {channel}"
                 )
+                mark = QLabel("✓", button)
+                mark.setAlignment(Qt.AlignCenter)
+                mark.setAttribute(Qt.WA_TransparentForMouseEvents)
+                mark.setFixedSize(11, 11)
+                mark.move(self.CELL_SIZE - 11, 0)
+                mark.setStyleSheet(
+                    "color: #08752c; background-color: white; "
+                    "border: 1px solid #08752c; border-radius: 5px; "
+                    "font-size: 8px; font-weight: bold;"
+                )
+                mark.hide()
                 layout.addWidget(button, row + 2, col + 2)
                 row_buttons.append(button)
+                row_marks.append(mark)
             self._buttons.append(row_buttons)
+            self._completion_marks.append(row_marks)
+
+    def clear_completed(self):
+        for marks in self._completion_marks:
+            for mark in marks:
+                mark.hide()
+
+    def mark_completed(self, mode, target):
+        target = int(target)
+        if mode == "channel":
+            if not 0 <= target <= 255:
+                raise ValueError(f"Channel out of range: {target}")
+            row, col = divmod(target, 16)
+            marks = [self._completion_marks[row][col]]
+        elif mode == "row":
+            if not 0 <= target < 16:
+                raise ValueError(f"Row out of range: {target}")
+            marks = self._completion_marks[target]
+        elif mode == "column":
+            if not 0 <= target < 16:
+                raise ValueError(f"Column out of range: {target}")
+            marks = [row[target] for row in self._completion_marks]
+        else:
+            raise ValueError(f"Unknown measurement mode: {mode}")
+
+        for mark in marks:
+            mark.show()
+            mark.raise_()
+
+    def completed_channels(self):
+        return [
+            row * 16 + col
+            for row, marks in enumerate(self._completion_marks)
+            for col, mark in enumerate(marks)
+            if not mark.isHidden()
+        ]
 
     def _selection_changed(self, _checked=False):
         self.selection_changed.emit(len(self.selected_targets()))

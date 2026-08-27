@@ -95,6 +95,27 @@ class ChannelGridTests(unittest.TestCase):
         self.assertEqual(grid.selected_targets(), [3])
         self.assertEqual(grid.selected_channels(), list(range(3, 256, 16)))
 
+    def test_completed_measurement_targets_show_check_marks(self):
+        grid = ChannelGrid()
+
+        grid.mark_completed("channel", 18)
+        self.assertEqual(grid.completed_channels(), [18])
+
+        grid.mark_completed("row", 2)
+        self.assertEqual(
+            grid.completed_channels(),
+            [18] + list(range(32, 48)),
+        )
+
+        grid.mark_completed("column", 3)
+        self.assertEqual(
+            grid.completed_channels(),
+            sorted(set([18] + list(range(32, 48)) + list(range(3, 256, 16)))),
+        )
+
+        grid.clear_completed()
+        self.assertEqual(grid.completed_channels(), [])
+
 
 class FakeIVMeasurement:
     def __init__(self):

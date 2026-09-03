@@ -4,6 +4,7 @@ import argparse
 import datetime
 from pathlib import Path
 
+from matplotlib.figure import Figure
 import numpy as np
 
 from lgad_ivcv.inst import Keithley2400
@@ -91,8 +92,73 @@ def measure_sweep(smu, vstart, vend, vstep, current_compliance,
     return np.asarray(measurements, dtype=float)
 
 
+def linear_fit(data):
+    """Fit Ismu = slope * Vsmu + intercept using finite measured values."""
+    data = np.asarray(data, dtype=float)
+    if data.ndim != 2 or data.shape[1] < 3:
+        raise ValueError("Measurement data must contain Vinput, Vsmu, and Ismu")
+
+    vsmu = data[:, 1]
+    ismu = data[:, 2]
+    valid = np.isfinite(vsmu) & np.isfinite(ismu)
+    vsmu = vsmu[valid]
+    ismu = ismu[valid]
+
+    if len(vsmu) < 2 or len(np.unique(vsmu)) < 2:
+        return None
+
+    slope, intercept = np.polyfit(vsmu, ismu, 1)
+    inverse_slope = np.inf if slope == 0 else 1.0 / slope
+    return slope, intercept, inverse_slope
+
+
+def save_plot(data, output_path, sensor_name):
+    """Save a Vsmu-Ismu plot and annotate its linear-fit parameters."""
+    data = np.asarray(data, dtype=float)
+    vsmu = data[:, 1]
+    ismu = data[:, 2]
+    valid = np.isfinite(vsmu) & np.isfinite(ismu)
+
+    figure = Figure(figsize=(8, 6))
+    axis = figure.add_subplot()
+    axis.plot(vsmu[valid], ismu[valid], "o-", label="Measured")
+
+    fit = linear_fit(data)
+    if fit is None:
+        fit_text = "Linear fit unavailable"
+    else:
+        slope, intercept, inverse_slope = fit
+        fit_voltage = np.linspace(vsmu[valid].min(), vsmu[valid].max(), 200)
+        fit_current = slope * fit_voltage + intercept
+        axis.plot(fit_voltage, fit_current, "--", label="Linear fit")
+        fit_text = (
+            f"dI/dV = {slope:.6e} A/V\n"
+            f"dV/dI = {inverse_slope:.6e} Ohm"
+        )
+
+    axis.text(
+        0.03,
+        0.97,
+        fit_text,
+        transform=axis.transAxes,
+        ha="left",
+        va="top",
+        bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.85},
+    )
+    axis.set_title(f"{sensor_name} - Keithley 2400 IV Sweep")
+    axis.set_xlabel("Vsmu (V)")
+    axis.set_ylabel("Ismu (A)")
+    axis.grid(True, alpha=0.3)
+    axis.legend(loc="lower right")
+    figure.tight_layout()
+
+    plot_path = Path(output_path).with_suffix(".png")
+    figure.savefig(plot_path, dpi=150)
+    return plot_path
+
+
 def save_results(data, resultpath, sensor_name):
-    """Save results below the project's standard result directory."""
+    """Save text results and their IV plot below the standard result directory."""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S")
     safe_sensor_name = sensor_name.replace("/", "_").replace("\\", "_")
     output_dir = Path(resultpath) / timestamp[:10] / safe_sensor_name
@@ -112,6 +178,7 @@ def save_results(data, resultpath, sensor_name):
         header="Vinput(V)\tVsmu(V)\tIsmu(A)",
         delimiter="\t",
     )
+    save_plot(data, output_path, sensor_name)
     return output_path
 
 
@@ -143,6 +210,7 @@ def run_sweep(vstart, vend, vstep, current_compliance, resultpath,
 
     output_path = save_results(data, resultpath, sensor_name)
     print(f"Results saved: {output_path}")
+    print(f"Plot saved: {output_path.with_suffix('.png')}")
     return output_path
 
 

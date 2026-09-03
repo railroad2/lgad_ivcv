@@ -1,4 +1,5 @@
 import unittest
+from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
 import numpy as np
@@ -244,6 +245,25 @@ class ScriptLifecycleTests(unittest.TestCase):
 
         smu.set_voltage_ramp.assert_called_once_with(0)
         self.assertEqual(smu.set_output.call_args_list[-1].args, ("off",))
+
+    def test_smu_sweep_saves_plot_with_linear_fit(self):
+        data = np.array(
+            [
+                [-1.0, -1.0, 1.0],
+                [0.0, 0.0, 3.0],
+                [1.0, 1.0, 5.0],
+            ]
+        )
+
+        slope, intercept, inverse_slope = smu_sweep.linear_fit(data)
+        self.assertAlmostEqual(slope, 2.0)
+        self.assertAlmostEqual(intercept, 3.0)
+        self.assertAlmostEqual(inverse_slope, 0.5)
+
+        with TemporaryDirectory() as resultpath:
+            text_path = smu_sweep.save_results(data, resultpath, "sensor")
+            self.assertTrue(text_path.is_file())
+            self.assertTrue(text_path.with_suffix(".png").is_file())
 
 
 if __name__ == "__main__":

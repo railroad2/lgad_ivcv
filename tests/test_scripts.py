@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
+import numpy as np
+
 from scripts import (
     cv_all,
     cv_once,
@@ -10,6 +12,7 @@ from scripts import (
     iv_once,
     iv_row,
     iv_selected,
+    smu_sweep,
 )
 
 
@@ -182,6 +185,55 @@ class ScriptLifecycleTests(unittest.TestCase):
         )
         runner.swm.assert_not_called()
         runner.__exit__.assert_called_once()
+
+    def test_smu_sweep_generates_endpoint_in_both_directions(self):
+        np.testing.assert_allclose(
+            smu_sweep.make_voltage_points(0, -2.5, 1),
+            [0, -1, -2, -2.5],
+        )
+        np.testing.assert_allclose(
+            smu_sweep.make_voltage_points(-2, 0, 1, return_sweep=True),
+            [-2, -1, 0, 0, -1, -2],
+        )
+
+    def test_smu_sweep_rejects_nonpositive_step(self):
+        for step in (0, -1):
+            with self.subTest(step=step):
+                with self.assertRaisesRegex(ValueError, "greater than zero"):
+                    smu_sweep.make_voltage_points(0, -10, step)
+
+    def test_smu_sweep_rejects_nonpositive_compliance(self):
+        smu = MagicMock()
+
+        with self.assertRaisesRegex(ValueError, "Icompliance"):
+            smu_sweep.measure_sweep(smu, 0, -1, 1, 0)
+
+        smu.initialize.assert_not_called()
+
+    def test_smu_only_sweep_reads_current_and_shuts_down(self):
+        smu = MagicMock()
+        smu.measure.side_effect = ([0.0, 1e-9], [-1.0, 2e-9])
+
+        result = smu_sweep.measure_sweep(smu, 0, -1, 1, 1e-6)
+
+        np.testing.assert_allclose(
+            result,
+            [[0.0, 0.0, 1e-9], [-1.0, -1.0, 2e-9]],
+        )
+        smu.set_current_limit.assert_called_once_with(1e-6)
+        self.assertEqual(smu.measure.call_count, 2)
+        smu.set_voltage_ramp.assert_called_once_with(0)
+        self.assertEqual(smu.set_output.call_args_list[-1].args, ("off",))
+
+    def test_smu_only_sweep_shuts_down_after_read_failure(self):
+        smu = MagicMock()
+        smu.measure.side_effect = RuntimeError("read failed")
+
+        with self.assertRaisesRegex(RuntimeError, "read failed"):
+            smu_sweep.measure_sweep(smu, 0, -1, 1, 1e-6)
+
+        smu.set_voltage_ramp.assert_called_once_with(0)
+        self.assertEqual(smu.set_output.call_args_list[-1].args, ("off",))
 
 
 if __name__ == "__main__":

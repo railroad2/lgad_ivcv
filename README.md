@@ -89,6 +89,18 @@ python3 scripts/iv_once.py --sensorname sensor01
 python3 scripts/cv_once.py --sensorname sensor01
 ```
 
+To sweep and measure with only the Keithley 2400 SMU (without the switching
+matrix or picoammeter), use `smu_sweep.py`:
+
+```bash
+python3 scripts/smu_sweep.py \
+    --sensorname sensor01 --Vstart 0 --Vend -100 --Vstep 1 \
+    --Icompliance 1e-5 --smu 'ASRL/dev/ttyUSB0::INSTR'
+```
+
+When `--smu` is omitted, the script searches for the Keithley 2400. Results
+contain the requested voltage, measured SMU voltage, and measured SMU current.
+
 ### Measuring instruments
 
 The measurement programs use PyVISA resource names to open the instruments:

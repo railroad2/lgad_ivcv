@@ -261,9 +261,12 @@ class ScriptLifecycleTests(unittest.TestCase):
         self.assertAlmostEqual(inverse_slope, 0.5)
 
         with TemporaryDirectory() as resultpath:
-            text_path = smu_sweep.save_results(data, resultpath, "sensor")
+            text_path = smu_sweep.save_results(
+                data, resultpath, "sensor", postfix="dark/run"
+            )
             self.assertTrue(text_path.is_file())
             self.assertTrue(text_path.with_suffix(".png").is_file())
+            self.assertTrue(text_path.stem.endswith("_dark_run"))
 
 
 if __name__ == "__main__":

@@ -95,7 +95,8 @@ matrix or picoammeter), use `smu_sweep.py`:
 ```bash
 python3 scripts/smu_sweep.py \
     --sensorname sensor01 --Vstart 0 --Vend -100 --Vstep 1 \
-    --Icompliance 1e-5 --smu 'ASRL/dev/ttyUSB0::INSTR'
+    --Icompliance 1e-5 --smu 'ASRL/dev/ttyUSB0::INSTR' \
+    --postfix dark
 ```
 
 When `--smu` is omitted, the script searches for the Keithley 2400. Results
@@ -104,6 +105,8 @@ Before measurement, the SMU ramps from 0 V to `--Vstart` in fixed 1 V
 increments, independently of `--Vstep`. The script also saves a PNG plot of
 `Ismu` versus `Vsmu`; the plot includes a linear fit, its `dI/dV` slope, and
 the reciprocal `dV/dI` value.
+The optional `--postfix` value is appended to both output filenames before
+the `.txt` and `.png` extensions.
 
 ### Measuring instruments
 

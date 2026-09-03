@@ -157,19 +157,22 @@ def save_plot(data, output_path, sensor_name):
     return plot_path
 
 
-def save_results(data, resultpath, sensor_name):
+def save_results(data, resultpath, sensor_name, postfix=None):
     """Save text results and their IV plot below the standard result directory."""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S")
     safe_sensor_name = sensor_name.replace("/", "_").replace("\\", "_")
+    safe_postfix = ""
+    if postfix:
+        safe_postfix = str(postfix).strip().replace("/", "_").replace("\\", "_")
+    postfix_suffix = f"_{safe_postfix}" if safe_postfix else ""
     output_dir = Path(resultpath) / timestamp[:10] / safe_sensor_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    output_path = output_dir / f"IV_{safe_sensor_name}_smu_{timestamp}.txt"
+    output_stem = f"IV_{safe_sensor_name}_smu_{timestamp}{postfix_suffix}"
+    output_path = output_dir / f"{output_stem}.txt"
     version = 1
     while output_path.exists():
-        output_path = output_dir / (
-            f"IV_{safe_sensor_name}_smu_{timestamp}_v{version}.txt"
-        )
+        output_path = output_dir / f"{output_stem}_v{version}.txt"
         version += 1
 
     np.savetxt(
@@ -184,7 +187,7 @@ def save_results(data, resultpath, sensor_name):
 
 def run_sweep(vstart, vend, vstep, current_compliance, resultpath,
               sensor_name, resource=None, return_sweep=False,
-              terminals="rear"):
+              terminals="rear", postfix=None):
     """Open the Keithley 2400, run one sweep, save it, and close the VISA link."""
     smu = Keithley2400()
     if resource is None:
@@ -208,7 +211,7 @@ def run_sweep(vstart, vend, vstep, current_compliance, resultpath,
     finally:
         smu.close()
 
-    output_path = save_results(data, resultpath, sensor_name)
+    output_path = save_results(data, resultpath, sensor_name, postfix)
     print(f"Results saved: {output_path}")
     print(f"Plot saved: {output_path.with_suffix('.png')}")
     return output_path
@@ -224,6 +227,11 @@ def main():
         "--Vstep", type=float, default=1, help="Positive voltage-step magnitude"
     )
     parser.add_argument("--sensorname", default="test", help="Sensor name")
+    parser.add_argument(
+        "--postfix",
+        default=None,
+        help="Optional filename postfix applied to both TXT and PNG outputs",
+    )
     parser.add_argument(
         "--resultpath",
         default=None,
@@ -260,6 +268,7 @@ def main():
         args.smu,
         args.return_swp,
         args.terminals,
+        args.postfix,
     )
 
 

@@ -45,6 +45,15 @@ def _safe_shutdown(smu):
             print(f"WARNING: failed to {description}: {exc}")
 
 
+def _ramp_to_start(smu, vstart, vstep):
+    """Move from 0 V to the first measurement voltage without taking data."""
+    ramp_points = make_voltage_points(0, vstart, vstep)[1:]
+    if len(ramp_points):
+        print(f"Ramping from 0 V to {vstart:g} V")
+    for voltage in ramp_points:
+        smu.set_voltage(voltage)
+
+
 def measure_sweep(smu, vstart, vend, vstep, current_compliance,
                   return_sweep=False, terminals="rear"):
     """Configure an open SMU and return requested V, measured V, and I rows."""
@@ -62,6 +71,7 @@ def measure_sweep(smu, vstart, vend, vstep, current_compliance,
         smu.set_current_limit(current_compliance)
         smu.set_voltage(0)
         smu.set_output("on")
+        _ramp_to_start(smu, vstart, vstep)
 
         for index, requested_voltage in enumerate(voltages, start=1):
             smu.set_voltage(requested_voltage)

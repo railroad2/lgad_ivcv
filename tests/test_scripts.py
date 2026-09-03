@@ -225,6 +225,16 @@ class ScriptLifecycleTests(unittest.TestCase):
         smu.set_voltage_ramp.assert_called_once_with(0)
         self.assertEqual(smu.set_output.call_args_list[-1].args, ("off",))
 
+    def test_smu_only_sweep_ramps_from_zero_to_start_voltage(self):
+        smu = MagicMock()
+        smu.measure.side_effect = ([-2.0, 1e-9], [-3.0, 2e-9])
+
+        smu_sweep.measure_sweep(smu, -2, -3, 1, 1e-6)
+
+        set_voltages = [call.args[0] for call in smu.set_voltage.call_args_list]
+        self.assertEqual(set_voltages[:5], [0, -1, -2, -2, -3])
+        self.assertEqual(smu.measure.call_count, 2)
+
     def test_smu_only_sweep_shuts_down_after_read_failure(self):
         smu = MagicMock()
         smu.measure.side_effect = RuntimeError("read failed")

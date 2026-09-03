@@ -100,8 +100,8 @@ python3 scripts/smu_sweep.py \
 
 When `--smu` is omitted, the script searches for the Keithley 2400. Results
 contain the requested voltage, measured SMU voltage, and measured SMU current.
-Before measurement, the SMU ramps from 0 V to `--Vstart` in `--Vstep`
-increments.
+Before measurement, the SMU ramps from 0 V to `--Vstart` in fixed 1 V
+increments, independently of `--Vstep`.
 
 ### Measuring instruments
 

@@ -351,6 +351,9 @@ class MainWindow(QMainWindow):
         self.smu_find_button.clicked.connect(self._find_iv_smu)
         self.pau_edit = QLineEdit()
         self.pau_edit.setPlaceholderText("Leave blank for automatic discovery")
+        self.pau_enable_check = QCheckBox("Enable PAU")
+        self.pau_enable_check.setChecked(False)
+        self.pau_enable_check.toggled.connect(self._iv_pau_enabled_changed)
         self.pau_find_button = QPushButton("Find")
         self.pau_find_button.setFixedWidth(55)
         self.pau_find_button.clicked.connect(self._find_iv_pau)
@@ -362,8 +365,10 @@ class MainWindow(QMainWindow):
         pau_row.addWidget(self.pau_edit, 1)
         pau_row.addWidget(self.pau_find_button)
         instruments_form.addRow("SMU VISA resource", smu_row)
+        instruments_form.addRow("", self.pau_enable_check)
         instruments_form.addRow("PAU VISA resource", pau_row)
         instruments_form.addRow("", self.dry_run_check)
+        self._iv_pau_enabled_changed(False)
 
         connection_layout.addWidget(switching_matrix)
         connection_layout.addWidget(instruments)
@@ -516,6 +521,15 @@ class MainWindow(QMainWindow):
     def _find_cv_pau(self):
         self._start_instrument_search("cv_pau")
 
+    def _iv_pau_enabled_changed(self, enabled):
+        controls_enabled = (
+            bool(enabled)
+            and self._worker is None
+            and self._instrument_search is None
+        )
+        self.pau_edit.setEnabled(controls_enabled)
+        self.pau_find_button.setEnabled(controls_enabled)
+
     def _cv_pau_enabled_changed(self, enabled):
         controls_enabled = (
             bool(enabled)
@@ -604,6 +618,9 @@ class MainWindow(QMainWindow):
             self.cv_start_button.setEnabled(True)
             for button in self._instrument_find_buttons():
                 button.setEnabled(True)
+            self._iv_pau_enabled_changed(
+                self.pau_enable_check.isChecked()
+            )
             self._cv_pau_enabled_changed(
                 self.cv_pau_enable_check.isChecked()
             )
@@ -839,7 +856,11 @@ class MainWindow(QMainWindow):
         return IVRunConfig(
             port=port,
             smu_resource=self._optional_text(self.smu_edit),
-            pau_resource=self._optional_text(self.pau_edit),
+            pau_resource=(
+                self._optional_text(self.pau_edit)
+                if self.pau_enable_check.isChecked()
+                else None
+            ),
             sensor_name=sensor_name,
             result_path=result_path,
             start_voltage=start_voltage,
@@ -850,6 +871,7 @@ class MainWindow(QMainWindow):
             dry_run=self.dry_run_check.isChecked(),
             measurement_mode=measurement_mode,
             targets=targets,
+            pau_enabled=self.pau_enable_check.isChecked(),
         )
 
     def _make_cv_config(self):
@@ -1342,6 +1364,7 @@ class MainWindow(QMainWindow):
         for widget in (
             self.port_edit,
             self.smu_edit,
+            self.pau_enable_check,
             self.pau_edit,
             self.dry_run_check,
             self.measurement_mode_combo,
@@ -1380,6 +1403,9 @@ class MainWindow(QMainWindow):
         ):
             widget.setEnabled(not running)
         if not running:
+            self._iv_pau_enabled_changed(
+                self.pau_enable_check.isChecked()
+            )
             self._cv_pau_enabled_changed(
                 self.cv_pau_enable_check.isChecked()
             )
@@ -1393,6 +1419,9 @@ class MainWindow(QMainWindow):
             )
         self.smu_edit.clear()
         self.pau_edit.clear()
+        self.pau_enable_check.setChecked(
+            self._settings.value("iv/pau_enabled", False, type=bool)
+        )
         sensor_name = self._settings.value("sensor_name")
         if sensor_name is None:
             sensor_name = self._settings.value(
@@ -1498,6 +1527,10 @@ class MainWindow(QMainWindow):
         self._settings.setValue("iv/current_compliance", self.compliance_edit.text())
         self._settings.setValue("iv/return_sweep", self.return_sweep_check.isChecked())
         self._settings.setValue("iv/dry_run", self.dry_run_check.isChecked())
+        self._settings.setValue(
+            "iv/pau_enabled",
+            self.pau_enable_check.isChecked(),
+        )
         self._settings.setValue(
             "measurement_mode",
             self.measurement_mode_combo.currentData(),

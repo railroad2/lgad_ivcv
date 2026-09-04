@@ -117,6 +117,11 @@ class IV_sw:
             self.pau.open(pau_rsrc)
             print (f'PAU is connected: {pau_rsrc}')
 
+    def disable_pau(self):
+        """Disable optional PAU use for this IV measurement session."""
+        self.pau = None
+        self.pau_rsrc = None
+
     def set_sensor_name(self, sname):
         self.sname = sname
         self.iv.sensor_name = sname

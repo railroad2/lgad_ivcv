@@ -168,6 +168,10 @@ class FakeIVRunner:
     def set_pau(self, resource):
         self.pau_rsrc = resource or "ASRL/dev/ttyUSB1::INSTR"
 
+    def disable_pau(self):
+        self.pau = None
+        self.pau_rsrc = None
+
     def set_basepath(self, _path):
         pass
 
@@ -334,6 +338,30 @@ class IVWorkerTests(unittest.TestCase):
                 self.assertTrue(all(status["mode"] == mode for status in statuses))
                 self.assertNotIn("voltage", statuses[-1])
 
+    def test_worker_skips_pau_when_disabled(self):
+        config = IVRunConfig(
+            port="ws://test:8765",
+            smu_resource="GPIB0::24::INSTR",
+            pau_resource=None,
+            sensor_name="sensor",
+            result_path="/tmp/result",
+            start_voltage=0,
+            end_voltage=-10,
+            voltage_step=1,
+            current_compliance=1e-5,
+            return_sweep=False,
+            dry_run=True,
+            measurement_mode="channel",
+            targets=(0,),
+            pau_enabled=False,
+        )
+
+        with patch("lgad_ivcv.gui.iv_worker.IV_sw", FakeIVRunner):
+            IVWorker(config).run()
+
+        self.assertIsNone(FakeIVRunner.last_instance.pau)
+        self.assertIsNone(FakeIVRunner.last_instance.pau_rsrc)
+
 
 @unittest.skipIf(QApplication is None, "PySide6 is not installed")
 class CVWorkerTests(unittest.TestCase):
@@ -478,6 +506,37 @@ class MainWindowTests(unittest.TestCase):
         self.assertFalse(window.cv_pau_edit.isEnabled())
         self.assertFalse(window.cv_pau_find_button.isEnabled())
         self.assertIsNone(window._make_cv_config().pau_resource)
+
+        window.close()
+
+    def test_iv_pau_enable_controls_resource_and_config(self):
+        QSettings().remove("iv/pau_enabled")
+        window = MainWindow()
+
+        self.assertFalse(window.pau_enable_check.isChecked())
+        self.assertFalse(window.pau_edit.isEnabled())
+        self.assertFalse(window.pau_find_button.isEnabled())
+        config = window._make_config()
+        self.assertFalse(config.pau_enabled)
+        self.assertIsNone(config.pau_resource)
+
+        window.pau_enable_check.setChecked(True)
+        self.assertTrue(window.pau_edit.isEnabled())
+        self.assertTrue(window.pau_find_button.isEnabled())
+        config = window._make_config()
+        self.assertTrue(config.pau_enabled)
+        self.assertIsNone(config.pau_resource)
+
+        window.pau_edit.setText("ASRL/dev/ttyUSB1::INSTR")
+        self.assertEqual(
+            window._make_config().pau_resource,
+            "ASRL/dev/ttyUSB1::INSTR",
+        )
+
+        window.pau_enable_check.setChecked(False)
+        self.assertFalse(window.pau_edit.isEnabled())
+        self.assertFalse(window.pau_find_button.isEnabled())
+        self.assertIsNone(window._make_config().pau_resource)
 
         window.close()
 

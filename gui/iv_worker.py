@@ -23,6 +23,7 @@ class IVRunConfig:
     dry_run: bool
     measurement_mode: str
     targets: tuple
+    pau_enabled: bool = True
 
 
 class IVWorker(QObject):
@@ -144,15 +145,18 @@ class IVWorker(QObject):
                     )
             if self._stop_event.is_set():
                 runner.request_stop()
-            runner.set_pau(config.pau_resource)
-            if config.pau_resource is None:
-                resource = getattr(runner, "pau_rsrc", None)
-                if resource:
-                    self.instrument_resource_resolved.emit(
-                        "pau",
-                        str(resource),
-                        str(getattr(runner.pau, "found_idn", "") or ""),
-                    )
+            if config.pau_enabled:
+                runner.set_pau(config.pau_resource)
+                if config.pau_resource is None:
+                    resource = getattr(runner, "pau_rsrc", None)
+                    if resource:
+                        self.instrument_resource_resolved.emit(
+                            "pau",
+                            str(resource),
+                            str(getattr(runner.pau, "found_idn", "") or ""),
+                        )
+            else:
+                runner.disable_pau()
             runner.set_sweep(
                 config.start_voltage,
                 config.end_voltage,

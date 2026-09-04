@@ -529,7 +529,7 @@ class MainWindow(QMainWindow):
         if self._worker is not None or self._instrument_search is not None:
             return
 
-        instrument_type, name, _field, logger = (
+        instrument_type, name, field, logger = (
             self._instrument_search_specification(key)
         )
         logger(f"Searching for {name} VISA resource...")
@@ -539,7 +539,11 @@ class MainWindow(QMainWindow):
         self.start_button.setEnabled(False)
         self.cv_start_button.setEnabled(False)
 
-        finder = InstrumentFinder(instrument_type, self)
+        finder = InstrumentFinder(
+            instrument_type,
+            self,
+            preferred_resource=field.text().strip() or None,
+        )
         finder.search_key = key
         finder.found.connect(self._instrument_found_from_search)
         finder.not_found.connect(self._instrument_not_found_from_search)

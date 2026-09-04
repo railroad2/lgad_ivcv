@@ -45,7 +45,9 @@ class InstBase:
         rm = pyvisa.ResourceManager()
         try:
             for rname in rm.list_resources():
-                if 'ttyUSB' not in rname:
+                is_usb_serial = 'ttyUSB' in rname
+                is_gpib = rname.upper().startswith('GPIB')
+                if not (is_usb_serial or is_gpib):
                     continue
 
                 tmp = None

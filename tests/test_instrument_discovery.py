@@ -23,11 +23,13 @@ class FakeResourceManager:
     def __init__(self, resources):
         self.resources = resources
         self.close_count = 0
+        self.opened = []
 
     def list_resources(self):
         return tuple(self.resources)
 
     def open_resource(self, name, **_kwargs):
+        self.opened.append(name)
         return self.resources[name]
 
     def close(self):
@@ -72,6 +74,38 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         self.assertIsNone(found)
         self.assertIsNone(instrument.found_idn)
         self.assertEqual(resource.close_count, 1)
+        self.assertEqual(manager.close_count, 1)
+
+    def test_matching_gpib_resource_is_found(self):
+        resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 2400")
+        manager = FakeResourceManager({"GPIB0::24::INSTR": resource})
+        instrument = InstBase()
+
+        with patch(
+            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            return_value=manager,
+        ):
+            found = instrument.find_inst(msg="MODEL 2400")
+
+        self.assertEqual(found, "GPIB0::24::INSTR")
+        self.assertEqual(manager.opened, ["GPIB0::24::INSTR"])
+        self.assertEqual(resource.close_count, 1)
+        self.assertEqual(manager.close_count, 1)
+
+    def test_unrelated_visa_resource_is_not_probed(self):
+        resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 2400")
+        manager = FakeResourceManager({"TCPIP0::192.0.2.1::INSTR": resource})
+        instrument = InstBase()
+
+        with patch(
+            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            return_value=manager,
+        ):
+            found = instrument.find_inst(msg="MODEL 2400")
+
+        self.assertIsNone(found)
+        self.assertEqual(manager.opened, [])
+        self.assertEqual(resource.close_count, 0)
         self.assertEqual(manager.close_count, 1)
 
 

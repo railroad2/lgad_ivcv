@@ -26,7 +26,9 @@ class InstBase:
         self.verify_inst(self._verify_msg)
 
     def verify_inst(self, msg):
-        if msg not in self.get_idn():
+        messages = (msg,) if isinstance(msg, str) else tuple(msg)
+        identity = self.get_idn()
+        if not any(message in identity for message in messages):
             print ('An incorrect device has been assigned...')
             self._inst = []
             return -1
@@ -41,6 +43,7 @@ class InstBase:
 
         if msg is None:
             msg = self._verify_msg
+        messages = (msg,) if isinstance(msg, str) else tuple(msg)
 
         rm = pyvisa.ResourceManager()
         try:
@@ -65,9 +68,15 @@ class InstBase:
                     if tmp is not None:
                         tmp.close()
 
-                if msg in idn:
+                matched_message = next(
+                    (message for message in messages if message in idn),
+                    None,
+                )
+                if matched_message is not None:
                     self.found_idn = idn.strip()
-                    print(f"{msg} is found in {idn} from {rname}.")
+                    print(
+                        f"{matched_message} is found in {idn} from {rname}."
+                    )
                     return rname
         finally:
             rm.close()

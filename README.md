@@ -114,7 +114,7 @@ The measurement programs use PyVISA resource names to open the instruments:
 
 | Measurement | Option | Instrument | VISA resource name |
 | --- | --- | --- | --- |
-| IV | `--smu` | Keithley 2400 SMU | Searched automatically when omitted |
+| IV | `--smu` | Keithley 2400, 2410, or 2470 SMU | Searched automatically when omitted |
 | IV | `--pau` | Keithley 6487 picoammeter | Searched automatically when omitted |
 | CV | `--lcr` | Wayne Kerr 4300 LCR meter | Searched automatically when omitted |
 | CV | `--pau` | (Optional) Keithley 6487 picoammeter/bias source | Not searched automatically |
@@ -144,10 +144,12 @@ python3 scripts/cv_selected.py 0 17 255 \
     --pau 'ASRL/dev/ttyUSB1::INSTR'
 ```
 
-Automatic detection examines VISA resources whose names contain `ttyUSB`,
-queries each device with `*IDN?`, and selects the resource whose identification
-matches the expected instrument model. Resources using another transport or
-device name must be supplied explicitly.
+Automatic detection examines serial VISA resources whose names contain
+`ttyUSB` and GPIB VISA resources whose names start with `GPIB`, queries each
+device with `*IDN?`, and selects the resource whose identification matches the
+expected instrument model. Keithley 2400 and 2410 instruments use the
+`Keithley2400` driver; the 2470 uses its dedicated driver. Resources using
+another transport or device name must be supplied explicitly.
 
 IV measurement requires the SMU for voltage bias and can also use the
 picoammeter for an additional current reading. CV measurement requires the LCR

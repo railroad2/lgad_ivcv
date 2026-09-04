@@ -92,6 +92,20 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         self.assertEqual(resource.close_count, 1)
         self.assertEqual(manager.close_count, 1)
 
+    def test_keithley_2400_driver_also_matches_model_2410(self):
+        from lgad_ivcv.inst import Keithley2400
+
+        resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 2410")
+        manager = FakeResourceManager({"GPIB0::24::INSTR": resource})
+
+        with patch(
+            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            return_value=manager,
+        ):
+            found = Keithley2400().find_inst()
+
+        self.assertEqual(found, "GPIB0::24::INSTR")
+
     def test_unrelated_visa_resource_is_not_probed(self):
         resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 2400")
         manager = FakeResourceManager({"TCPIP0::192.0.2.1::INSTR": resource})

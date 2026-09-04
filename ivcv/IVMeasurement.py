@@ -5,6 +5,7 @@ import numpy as np
 
 from .Measurement  import Measurement
 from ..inst.Keithley2400 import Keithley2400
+from ..inst.Keithley2470 import Keithley2470
 from ..inst.Keithley6487 import Keithley6487
 from ..util.thread import BaseThread 
 from ..util.util   import parse_voltage_steps
@@ -56,7 +57,7 @@ class IVMeasurement(Measurement):
             self.resources_closed = False
 
     def set_smu(self, smu_visa_resource=None):
-        if isinstance(smu_visa_resource, Keithley2400):
+        if isinstance(smu_visa_resource, (Keithley2400, Keithley2470)):
             self.smu = smu_visa_resource
             self._initialize_smu()
         elif isinstance(smu_visa_resource, str):

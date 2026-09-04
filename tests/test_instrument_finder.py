@@ -51,6 +51,32 @@ class InstrumentFinderTests(unittest.TestCase):
 
         self.assertEqual(not_found, [True])
 
+    def test_smu_search_tries_multiple_driver_types(self):
+        class Missing2400:
+            def find_inst(self):
+                return None
+
+        class Found2470:
+            found_idn = "KEITHLEY INSTRUMENTS,MODEL 2470"
+
+            def find_inst(self):
+                return "GPIB0::18::INSTR"
+
+        finder = InstrumentFinder("smu")
+        found = []
+        finder.found.connect(lambda *args: found.append(args))
+
+        with patch.dict(
+            "lgad_ivcv.gui.instrument_finder.INSTRUMENT_FACTORIES",
+            {"smu": (Missing2400, Found2470)},
+        ):
+            finder.run()
+
+        self.assertEqual(
+            found,
+            [("GPIB0::18::INSTR", "KEITHLEY INSTRUMENTS,MODEL 2470")],
+        )
+
     def test_search_error_is_emitted(self):
         class FakeInstrument:
             def find_inst(self):

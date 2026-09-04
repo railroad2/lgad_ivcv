@@ -2,15 +2,43 @@ import time
 import threading
 from numbers import Integral
 
+import pyvisa
+
 from .IVMeasurement import IVMeasurement
 from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
-from ..inst import Keithley2400, Keithley6487
+from ..inst import Keithley2400, Keithley2470, Keithley6487
 from ..util.util import rowcol2nch
 
 
 _DEFAULT_PORT = object()
+_SMU_DRIVERS = (Keithley2400, Keithley2470)
+
+
+def _smu_driver_for_identity(identity):
+    identity = identity.upper()
+    if "MODEL 2470" in identity:
+        return Keithley2470
+    if "MODEL 2400" in identity or "MODEL 2410" in identity:
+        return Keithley2400
+    raise ValueError(f"Unsupported SMU: {identity.strip()}")
+
+
+def _query_visa_identity(resource_name):
+    """Read one resource identity before choosing its model-specific driver."""
+    manager = pyvisa.ResourceManager()
+    resource = None
+    try:
+        options = {}
+        if "ttyUSB" in resource_name:
+            options["read_termination"] = "\r"
+        resource = manager.open_resource(resource_name, **options)
+        return resource.query("*IDN?").strip()
+    finally:
+        if resource is not None:
+            resource.close()
+        manager.close()
 
 
 class IV_sw:
@@ -60,7 +88,16 @@ class IV_sw:
 
         if smu_rsrc is None:
             print ('Looking for the SMU')
-            smu_rsrc = self.smu.find_inst()
+            for driver_type in _SMU_DRIVERS:
+                candidate = driver_type()
+                smu_rsrc = candidate.find_inst()
+                if smu_rsrc is not None:
+                    self.smu = candidate
+                    break
+        else:
+            identity = _query_visa_identity(smu_rsrc)
+            self.smu = _smu_driver_for_identity(identity)()
+            self.smu.found_idn = identity
 
         self.smu_rsrc = smu_rsrc
         if smu_rsrc is not None:

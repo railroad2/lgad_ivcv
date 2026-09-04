@@ -6,7 +6,7 @@ from .instbase import InstBase
 
 class Keithley2400(InstBase):
     _read_termination = '\r'
-    _verify_msg = "KEITHLEY INSTRUMENTS INC.,MODEL 24"
+    _verify_msg = ("MODEL 2400", "MODEL 2410")
 
     def __init__(self, rname=None, read_termination=None, verify_msg=None):
         if read_termination:

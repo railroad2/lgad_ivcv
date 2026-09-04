@@ -1,4 +1,5 @@
 #
 from .Keithley2400 import Keithley2400
+from .Keithley2470 import Keithley2470
 from .Keithley6487 import Keithley6487
 from .WayneKerr4300 import WayneKerr4300

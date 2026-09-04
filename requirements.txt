@@ -1,6 +1,8 @@
 numpy>=1.24
 matplotlib>=3.7
 PyVISA>=1.14
+pyvisa-py>=0.7
+gpib-ctypes>=0.3.0
 pyserial>=3.5
 websockets>=12
 PySide6>=6.5

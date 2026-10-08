@@ -1,7 +1,8 @@
 import unittest
 from unittest.mock import patch
 
-from lgad_ivcv.inst.instbase import InstBase
+from lgad_ivcv.inst import Keithley6487
+from lgad_ivcv.inst.instbase import InstBase, InstError
 
 
 class FakeResource:
@@ -121,6 +122,43 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         self.assertEqual(manager.opened, [])
         self.assertEqual(resource.close_count, 0)
         self.assertEqual(manager.close_count, 1)
+
+
+class InstrumentOpenTests(unittest.TestCase):
+    def _open(self, resource):
+        manager = FakeResourceManager({"GPIB0::23::INSTR": resource})
+        instrument = Keithley6487()
+        with patch(
+            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            return_value=manager,
+        ):
+            instrument.open("GPIB0::23::INSTR")
+        return instrument
+
+    def test_matching_instrument_is_opened(self):
+        resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 6487,1,A\r")
+        instrument = self._open(resource)
+
+        self.assertIs(instrument._inst, resource)
+        self.assertEqual(
+            instrument.found_idn,
+            "KEITHLEY INSTRUMENTS INC.,MODEL 6487,1,A",
+        )
+        self.assertEqual(resource.close_count, 0)
+
+    def test_other_instrument_is_rejected_and_closed(self):
+        resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 2470,1,A")
+
+        with self.assertRaisesRegex(InstError, "not the expected instrument"):
+            self._open(resource)
+        self.assertEqual(resource.close_count, 1)
+
+    def test_silent_resource_is_rejected_and_closed(self):
+        resource = FakeResource(error=TimeoutError("timeout"))
+
+        with self.assertRaisesRegex(InstError, "No \\*IDN\\? response"):
+            self._open(resource)
+        self.assertEqual(resource.close_count, 1)
 
 
 if __name__ == "__main__":

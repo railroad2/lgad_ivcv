@@ -23,7 +23,34 @@ class InstBase:
         rm = pyvisa.ResourceManager()
         self._inst = rm.open_resource(rname, 
                                       read_termination=self._read_termination)
-        self.verify_inst(self._verify_msg)
+        self._check_identity(rname)
+
+    def _check_identity(self, rname):
+        """Close the resource and raise unless it is the expected model."""
+        messages = self._verify_msg
+        messages = (messages,) if isinstance(messages, str) else tuple(messages)
+        try:
+            identity = self.get_idn().strip()
+        except Exception as exc:
+            self._close_unverified()
+            raise InstError(
+                f"No *IDN? response from {rname}: {exc}"
+            ) from exc
+
+        if not any(message in identity for message in messages):
+            self._close_unverified()
+            expected = " or ".join(messages)
+            raise InstError(
+                f"{rname} is not the expected instrument "
+                f"(expected {expected}, got {identity or 'an empty reply'})"
+            )
+        self.found_idn = identity
+
+    def _close_unverified(self):
+        try:
+            self._inst.close()
+        finally:
+            self._inst = []
 
     def verify_inst(self, msg):
         messages = (msg,) if isinstance(msg, str) else tuple(msg)

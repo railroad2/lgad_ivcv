@@ -9,6 +9,7 @@ from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
 from ..inst import Keithley2400, Keithley2470, Keithley6487
+from ..inst.instbase import InstError
 from ..util.util import (
     channel_label, col_label, row_label, rowcol2nch, target_text,
 )
@@ -97,7 +98,12 @@ class IV_sw:
                     self.smu = candidate
                     break
         else:
-            identity = _query_visa_identity(smu_rsrc)
+            try:
+                identity = _query_visa_identity(smu_rsrc)
+            except Exception as exc:
+                raise InstError(
+                    f"No *IDN? response from {smu_rsrc}: {exc}"
+                ) from exc
             self.smu = _smu_driver_for_identity(identity)()
             self.smu.found_idn = identity
 

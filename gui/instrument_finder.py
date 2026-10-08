@@ -1,8 +1,7 @@
-import pyvisa
-
 from PySide6.QtCore import QThread, Signal
 
 from ..inst import Keithley2400, Keithley2470, Keithley6487, WayneKerr4300
+from ..inst import visa
 
 
 INSTRUMENT_FACTORIES = {
@@ -39,7 +38,7 @@ class InstrumentFinder(QThread):
 
     @staticmethod
     def _query_identity(resource_name, read_termination):
-        manager = pyvisa.ResourceManager()
+        manager = visa.ResourceManager()
         resource = None
         try:
             resource = manager.open_resource(

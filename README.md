@@ -151,6 +151,39 @@ expected instrument model. Keithley 2400 and 2410 instruments use the
 `Keithley2400` driver; the 2470 uses its dedicated driver. Resources using
 another transport or device name must be supplied explicitly.
 
+### NI GPIB-USB-HS on Linux
+
+GPIB resources such as `GPIB0::24::INSTR` can be driven through an NI
+GPIB-USB-HS adapter with the user-space `ni-gpib-usb-hs` package, without
+NI-488.2, NI-VISA, or `linux-gpib`. Install libusb and give your user access to
+the adapter (USB ID `3923:709b`):
+
+```bash
+sudo apt install libusb-1.0-0
+echo 'SUBSYSTEM=="usb", ATTRS{idVendor}=="3923", ATTRS{idProduct}=="709b", MODE="0660", GROUP="plugdev"' \
+    | sudo tee /etc/udev/rules.d/99-ni-gpib-usb-hs.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
+```
+
+If `linux-gpib` is installed, unload its `ni_usb_gpib` kernel module so that it
+does not claim the adapter.
+
+`IVCV_GPIB_BACKEND` selects how `GPIB...::INSTR` resources are opened:
+
+| Value | Behavior |
+| --- | --- |
+| `auto` (default) | Use the NI GPIB-USB-HS when the package is installed and the adapter is attached; otherwise PyVISA |
+| `niusb` | Always use the NI GPIB-USB-HS |
+| `visa` | Always use PyVISA (NI-VISA or `linux-gpib`) |
+
+With the NI GPIB-USB-HS backend, automatic detection queries `*IDN?` at GPIB
+addresses 1 to 30. Pass the resource name explicitly to skip the scan:
+
+```bash
+python3 scripts/iv_selected.py A00 --sensorname sensor01 \
+    --smu 'GPIB0::24::INSTR' --pau 'GPIB0::22::INSTR'
+```
+
 IV measurement requires the SMU for voltage bias and can also use the
 picoammeter for an additional current reading. CV measurement requires the LCR
 meter. The PAU is optional for CV. When `--pau` is omitted, the LCR meter

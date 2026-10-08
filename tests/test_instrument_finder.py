@@ -143,7 +143,7 @@ class InstrumentFinderTests(unittest.TestCase):
             "lgad_ivcv.gui.instrument_finder.INSTRUMENT_FACTORIES",
             {"smu": FakeInstrument},
         ), patch(
-            "lgad_ivcv.gui.instrument_finder.pyvisa.ResourceManager",
+            "lgad_ivcv.inst.visa.pyvisa.ResourceManager",
             return_value=manager,
         ):
             finder.run()
@@ -182,7 +182,7 @@ class InstrumentFinderTests(unittest.TestCase):
             "lgad_ivcv.gui.instrument_finder.INSTRUMENT_FACTORIES",
             {"smu": FakeInstrument},
         ), patch(
-            "lgad_ivcv.gui.instrument_finder.pyvisa.ResourceManager",
+            "lgad_ivcv.inst.visa.pyvisa.ResourceManager",
             return_value=manager,
         ):
             finder.run()

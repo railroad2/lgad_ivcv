@@ -2,13 +2,12 @@ import time
 import threading
 from numbers import Integral
 
-import pyvisa
-
 from .IVMeasurement import IVMeasurement
 from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
 from ..inst import Keithley2400, Keithley2470, Keithley6487
+from ..inst import visa
 from ..util.util import rowcol2nch
 
 
@@ -27,7 +26,7 @@ def _smu_driver_for_identity(identity):
 
 def _query_visa_identity(resource_name):
     """Read one resource identity before choosing its model-specific driver."""
-    manager = pyvisa.ResourceManager()
+    manager = visa.ResourceManager()
     resource = None
     try:
         options = {}

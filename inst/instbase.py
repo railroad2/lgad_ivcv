@@ -1,6 +1,8 @@
 import time
 import pyvisa
 
+from . import visa
+
 class InstError(Exception):
     pass
 
@@ -20,7 +22,7 @@ class InstBase:
         if write_termination:
             self._write_termination = write_termination
         
-        rm = pyvisa.ResourceManager()
+        rm = visa.ResourceManager()
         self._inst = rm.open_resource(rname, 
                                       read_termination=self._read_termination)
         self.verify_inst(self._verify_msg)
@@ -45,7 +47,7 @@ class InstBase:
             msg = self._verify_msg
         messages = (msg,) if isinstance(msg, str) else tuple(msg)
 
-        rm = pyvisa.ResourceManager()
+        rm = visa.ResourceManager()
         try:
             for rname in rm.list_resources():
                 is_usb_serial = 'ttyUSB' in rname
@@ -60,8 +62,8 @@ class InstBase:
                         read_termination=read_termination,
                     )
                     idn = tmp.query("*idn?")
-                except pyvisa.VisaIOError as exc:
-                    if exc.error_code == pyvisa.constants.VI_ERROR_TMO:
+                except visa.RESOURCE_ERRORS as exc:
+                    if getattr(exc, "error_code", None) == pyvisa.constants.VI_ERROR_TMO:
                         print(f"Operation timed out for {rname}")
                     continue
                 finally:

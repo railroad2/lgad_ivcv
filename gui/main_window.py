@@ -1201,8 +1201,9 @@ class MainWindow(QMainWindow):
         self.cv_resistance_curve.setData(self._cv_plot_voltage, resistance)
 
     def _measurement_completed(self, stopped, result_path):
-        result_path = self._mark_log_only_result(
+        result_path = self._mark_finished_result(
             result_path,
+            stopped,
             "_log_file_path",
         )
         if stopped:
@@ -1230,8 +1231,9 @@ class MainWindow(QMainWindow):
         )
 
     def _cv_measurement_completed(self, stopped, result_path):
-        result_path = self._mark_log_only_result(
+        result_path = self._mark_finished_result(
             result_path,
+            stopped,
             "_cv_log_file_path",
         )
         message = (
@@ -1320,6 +1322,16 @@ class MainWindow(QMainWindow):
                 path.write_text(existing_log + "\n", encoding="utf-8")
             return path
 
+    def _mark_finished_result(self, result_path, stopped, log_path_attribute):
+        """Mark a log-only session, otherwise a stopped one, by its name."""
+        marked_path = self._mark_log_only_result(result_path, log_path_attribute)
+        if stopped and marked_path == str(Path(result_path).expanduser()):
+            marked_path = self._mark_aborted_result(
+                marked_path,
+                log_path_attribute,
+            )
+        return marked_path
+
     def _mark_log_only_result_from_log(self, log_path_attribute):
         log_path = getattr(self, log_path_attribute)
         if log_path is None:
@@ -1339,11 +1351,20 @@ class MainWindow(QMainWindow):
         ):
             return str(directory)
 
-        candidate = directory.with_name(f"{directory.name}_logonly")
+        return self._rename_result(directory, "logonly", log_path_attribute)
+
+    def _mark_aborted_result(self, result_path, log_path_attribute):
+        directory = Path(result_path).expanduser()
+        if not directory.is_dir():
+            return str(directory)
+        return self._rename_result(directory, "ABORTED", log_path_attribute)
+
+    def _rename_result(self, directory, suffix, log_path_attribute):
+        candidate = directory.with_name(f"{directory.name}_{suffix}")
         version = 1
         while candidate.exists():
             candidate = directory.with_name(
-                f"{directory.name}_v{version}_logonly"
+                f"{directory.name}_v{version}_{suffix}"
             )
             version += 1
 
@@ -1352,7 +1373,9 @@ class MainWindow(QMainWindow):
         except OSError:
             return str(directory)
 
-        setattr(self, log_path_attribute, candidate / log_path.name)
+        log_path = getattr(self, log_path_attribute)
+        if log_path is not None and log_path.parent == directory:
+            setattr(self, log_path_attribute, candidate / log_path.name)
         return str(candidate)
 
     def _set_running(self, running, active_measurement=None):

@@ -877,6 +877,44 @@ class MainWindowTests(unittest.TestCase):
 
         window.close()
 
+    def test_stopped_session_with_data_gets_aborted_suffix(self):
+        window = MainWindow()
+
+        with tempfile.TemporaryDirectory() as result_path:
+            session = Path(result_path) / "IV_ROW_session"
+            window._start_file_log(session)
+            (session / "IV_sensor_A00_v0.txt").write_text(
+                "measurement data\n",
+                encoding="utf-8",
+            )
+            window._measurement_completed(True, str(session))
+
+            renamed = Path(result_path) / "IV_ROW_session_ABORTED"
+            self.assertFalse(session.exists())
+            self.assertTrue((renamed / "IV_sensor_A00_v0.txt").is_file())
+            self.assertEqual(window._log_file_path.parent, renamed)
+            self.assertIn(
+                f"Result path: {renamed}",
+                window._log_file_path.read_text(encoding="utf-8"),
+            )
+
+        window.close()
+
+    def test_stopped_log_only_cv_session_gets_logonly_suffix(self):
+        window = MainWindow()
+
+        with tempfile.TemporaryDirectory() as result_path:
+            session = Path(result_path) / "CV_session"
+            window._start_cv_file_log(session)
+            window._cv_measurement_completed(True, str(session))
+
+            self.assertTrue((Path(result_path) / "CV_session_logonly").is_dir())
+            self.assertFalse(
+                (Path(result_path) / "CV_session_ABORTED").exists()
+            )
+
+        window.close()
+
     def test_session_with_measurement_data_keeps_its_name(self):
         window = MainWindow()
 

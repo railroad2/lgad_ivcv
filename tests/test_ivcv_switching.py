@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import Mock, call, patch
 
 from lgad_ivcv.ivcv.cv_sw import CV_sw
@@ -83,6 +84,47 @@ class SwitchingMeasurementTests(unittest.TestCase):
                         getattr(runner, measurement_name).sensor_name,
                         "sensor",
                     )
+
+                    measurement = getattr(runner, measurement_name)
+                    measurement.resources_closed = False
+                    measurement.measurement_arr = [[0, 0, 0, 0]]
+                    directory = Path(output_path)
+                    log_path = directory / f"{base_prefix}_GUI.log"
+                    log_path.touch()
+                    plot_method = (
+                        "save_as_plot" if measurement_name == "iv"
+                        else "save_cv_plot"
+                    )
+                    with patch.object(
+                        measurement, plot_method,
+                        side_effect=lambda path: Path(path).touch(),
+                    ), patch("builtins.print"):
+                        measurement.save_results()
+                        measurement.save_results()
+
+                    self.assertEqual(measurement.get_out_dir(), output_path)
+                    self.assertTrue(log_path.is_file())
+                    self.assertEqual(len(list(directory.glob("*.txt"))), 2)
+                    self.assertEqual(len(list(directory.glob("*.png"))), 2)
+                    self.assertEqual(list(directory.parent.iterdir()), [directory])
+
+    def test_save_without_prepared_session_creates_default_directory(self):
+        for runner_type, prefix, attribute, plot_method in (
+            (IV_sw, "IV", "iv", "save_as_plot"),
+            (CV_sw, "CV", "cv", "save_cv_plot"),
+        ):
+            with self.subTest(prefix=prefix), tempfile.TemporaryDirectory() as root:
+                runner = runner_type(port=None, dryrun=True)
+                runner.set_basepath(root)
+                runner.set_sensor_name("sensor")
+                measurement = getattr(runner, attribute)
+                measurement.resources_closed = False
+                measurement.measurement_arr = [[0, 0, 0, 0]]
+                with patch.object(measurement, plot_method), patch("builtins.print"):
+                    measurement.save_results()
+                directory = Path(measurement.get_out_dir())
+                self.assertTrue(directory.name.startswith(f"{prefix}_"))
+                self.assertEqual(len(list(directory.glob("*.txt"))), 1)
 
     def test_iv_channel_uses_linear_pin_and_cleans_up_on_failure(self):
         runner = IV_sw.__new__(IV_sw)

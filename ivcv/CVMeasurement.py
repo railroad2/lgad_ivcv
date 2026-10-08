@@ -295,7 +295,9 @@ class CVMeasurement(Measurement):
 
             #self.resources_closed = True
 
-            self._make_out_dir(prefix="CV") # moved from initialize (kmlee 2026-02-09)
+            # Keep the session directory already shared with the GUI log.
+            if not self.out_dir_path:
+                self._make_out_dir(prefix="CV")
 
             file_name = self.make_out_file_name(prefix='CV')
             out_file_name = self.get_unique_file_path(file_name)

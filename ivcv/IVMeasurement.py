@@ -197,7 +197,9 @@ class IVMeasurement(Measurement):
             #    self.pau.close()
             #self.resources_closed = True
 
-            self._make_out_dir(prefix="IV")
+            # Keep the session directory already shared with the GUI log.
+            if not self.out_dir_path:
+                self._make_out_dir(prefix="IV")
             file_name = self.make_out_file_name(prefix='IV')
             out_file_name = self.get_unique_file_path(file_name)
 

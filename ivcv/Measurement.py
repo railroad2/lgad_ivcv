@@ -4,7 +4,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from threading import Event
-from ..util.util import mkdir, getdate, gettime, round_to_significant_figures
+from ..util.util import (
+    mkdir, getdate, gettime, round_to_significant_figures, rowcol2label,
+)
 
 
 class Measurement:
@@ -78,7 +80,7 @@ class Measurement:
         if self.measurement_target_label:
             location_label = self.measurement_target_label
         else:
-            location_label = f'row{self.row_number:02d}_col{self.col_number:02d}'
+            location_label = rowcol2label(self.row_number, self.col_number)
 
         if separator in self.sensor_name:
             sensor_name, descr = self.sensor_name.split(separator, 1)

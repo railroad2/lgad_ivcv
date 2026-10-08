@@ -211,8 +211,8 @@ class SwitchingMeasurementTests(unittest.TestCase):
         self.assertEqual(
             runner.measure.call_args_list,
             [
-                call(2, 0, target_label="row02_allcol"),
-                call(0, 3, target_label="allrow_col03"),
+                call(2, 0, target_label="C"),
+                call(0, 3, target_label="03"),
             ],
         )
         self.assertEqual(

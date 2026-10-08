@@ -59,6 +59,21 @@ def nch2rowcol(nch, ncol=16):
     return res
 
 
+def row_label(row):
+    """Return the matrix row label: 0 -> 'A', 15 -> 'P'."""
+    return chr(ord("A") + row)
+
+
+def col_label(col):
+    """Return the matrix column label: 3 -> '03'."""
+    return f"{col:02d}"
+
+
+def rowcol2label(row, col):
+    """Return the matrix channel label: (2, 3) -> 'C03'."""
+    return f"{row_label(row)}{col_label(col)}"
+
+
 def rowcol2nch(rowcol, ncol=16):
     try:
         iter(rowcol[0])

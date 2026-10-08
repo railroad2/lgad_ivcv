@@ -883,7 +883,7 @@ class MainWindowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as result_path:
             session = Path(result_path) / "CV_session"
             window._start_cv_file_log(session)
-            (session / "CV_sensor_row00_col00_v0.txt").write_text(
+            (session / "CV_sensor_A00_v0.txt").write_text(
                 "measurement data\n",
                 encoding="utf-8",
             )

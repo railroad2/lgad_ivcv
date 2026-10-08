@@ -7,7 +7,7 @@ from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
 from ..inst import WayneKerr4300, Keithley6487
-from ..util.util import rowcol2nch
+from ..util.util import col_label, row_label, rowcol2nch
 
 
 _DEFAULT_PORT = object()
@@ -235,7 +235,7 @@ class CV_sw:
                 try:
                     if verbose:
                         print(swm.pinstat_all())
-                    self.measure(row, 0, target_label=f"row{row:02d}_allcol")
+                    self.measure(row, 0, target_label=row_label(row))
                 finally:
                     swm.off_row(row)
                     if verbose:
@@ -281,7 +281,7 @@ class CV_sw:
                 try:
                     if verbose:
                         print(swm.pinstat_all())
-                    self.measure(0, col, target_label=f"allrow_col{col:02d}")
+                    self.measure(0, col, target_label=col_label(col))
                 finally:
                     swm.off_col(col)
                     if verbose:

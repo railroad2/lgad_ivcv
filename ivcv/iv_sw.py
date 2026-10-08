@@ -9,7 +9,7 @@ from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
 from ..inst import Keithley2400, Keithley2470, Keithley6487
-from ..util.util import rowcol2nch
+from ..util.util import col_label, row_label, rowcol2nch
 
 
 _DEFAULT_PORT = object()
@@ -313,7 +313,7 @@ class IV_sw:
                         print(f'   dry run row: {row}')
                     else:
                         t0 = time.time()
-                        self.measure_Vsweep(row, 0, target_label=f'row{row:02d}_allcol')
+                        self.measure_Vsweep(row, 0, target_label=row_label(row))
                         t1 = time.time()
                         print(f'   Elapsed time for row sweep = {t1 - t0} s')
                 finally:
@@ -378,7 +378,7 @@ class IV_sw:
                         print(f'   dry run col: {col}')
                     else:
                         t0 = time.time()
-                        self.measure_Vsweep(0, col, target_label=f'allrow_col{col:02d}')
+                        self.measure_Vsweep(0, col, target_label=col_label(col))
                         t1 = time.time()
                         print(f'   Elapsed time for col sweep = {t1 - t0} s')
                 finally:

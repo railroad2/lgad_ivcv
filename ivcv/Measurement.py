@@ -13,6 +13,7 @@ class Measurement:
     def __init__(self):
         self.sensor_name = ''
         self.measurement_target_label = None
+        self.measurement_kind = None
         self.initial_voltage = 0
         self.final_voltage = -250
         self.voltage_step = 1
@@ -77,6 +78,9 @@ class Measurement:
     def make_out_file_name(self, prefix="IV"):
         separator = ','
 
+        if self.measurement_kind:
+            prefix = f'{prefix}_{self.measurement_kind}'
+
         if self.measurement_target_label:
             location_label = self.measurement_target_label
         else:
@@ -94,22 +98,27 @@ class Measurement:
     def set_measurement_target_label(self, label=None):
         self.measurement_target_label = label
 
+    def set_measurement_kind(self, kind=None):
+        """Set the file-name tag for the measurement mode, e.g. 'PIXEL'."""
+        self.measurement_kind = kind
+
     def get_unique_file_path(self, file_name, extension='.txt'):
         # Regular expression to find files with the given prefix and a version number
         version_pattern = re.compile(rf'^{re.escape(file_name)}_v(\d+){re.escape(extension)}$')
 
         # Get all files in the directory that match the pattern
-        matching_files = [f for f in os.listdir(self.out_dir_path) if version_pattern.match(f)]
+        files = os.listdir(self.out_dir_path)
+        matching_files = [f for f in files if version_pattern.match(f)]
 
-        # If no matching files are found, return the first version
-        if not matching_files:
-            return os.path.join(self.out_dir_path, f"{file_name}_v0")
+        # Use the plain name unless that name is already taken
+        if not matching_files and f"{file_name}{extension}" not in files:
+            return os.path.join(self.out_dir_path, file_name)
 
         # Extract the version numbers from the matching files
         version_numbers = [int(version_pattern.match(f).group(1)) for f in matching_files]
 
-        # Determine the next version number
-        next_version = max(version_numbers) + 1
+        # Determine the next version number, starting at _v1
+        next_version = max(version_numbers, default=0) + 1
 
         # Return the new filename with the incremented version number
         return os.path.join(self.out_dir_path, f"{file_name}_v{next_version}")

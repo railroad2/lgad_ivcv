@@ -49,6 +49,9 @@ class FakeMeasurement:
     def set_measurement_time(self):
         self.time_set = True
 
+    def set_measurement_kind(self, kind=None):
+        self.measurement_kind = kind
+
     def prepare_output_directory(self, prefix="IV"):
         self.out_dir_path = "/tmp/result/measurement"
         return self.out_dir_path
@@ -63,11 +66,11 @@ class SwitchingMeasurementTests(unittest.TestCase):
             (IV_sw, "IV", "iv"),
             (CV_sw, "CV", "cv"),
         ):
-            for mode, mode_prefix in (
-                (None, base_prefix),
-                ("channel", f"{base_prefix}_PIXEL"),
-                ("row", f"{base_prefix}_ROW"),
-                ("column", f"{base_prefix}_COL"),
+            for mode, mode_prefix, file_prefix in (
+                (None, base_prefix, base_prefix),
+                ("channel", f"{base_prefix}_PIXEL", f"{base_prefix}_PIXEL"),
+                ("row", f"{base_prefix}_ROW", f"{base_prefix}_ROW"),
+                ("column", f"{base_prefix}_COL", f"{base_prefix}_COLUMN"),
             ):
                 with self.subTest(runner=runner_type.__name__, mode=mode):
                     result_dir = tempfile.TemporaryDirectory()
@@ -83,6 +86,14 @@ class SwitchingMeasurementTests(unittest.TestCase):
                     self.assertEqual(
                         getattr(runner, measurement_name).sensor_name,
                         "sensor",
+                    )
+                    getattr(runner, measurement_name).row_number = 1
+                    getattr(runner, measurement_name).col_number = 1
+                    self.assertEqual(
+                        getattr(runner, measurement_name).make_out_file_name(
+                            prefix=base_prefix
+                        ),
+                        f"{file_prefix}_sensor_B01",
                     )
 
                     measurement = getattr(runner, measurement_name)

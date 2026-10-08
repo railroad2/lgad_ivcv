@@ -92,6 +92,15 @@ class CV_sw:
 
     def prepare_output_directory(self, measurement_mode=None):
         """Create the CV session directory before instruments start measuring."""
+        kinds = {
+            None: None,
+            "channel": "PIXEL",
+            "row": "ROW",
+            "column": "COLUMN",
+        }
+        if measurement_mode not in kinds:
+            raise ValueError(f"Unknown measurement mode: {measurement_mode}")
+        self.cv.set_measurement_kind(kinds[measurement_mode])
         if not self.cv.get_out_dir():
             prefixes = {
                 None: "CV",
@@ -99,8 +108,6 @@ class CV_sw:
                 "row": "CV_ROW",
                 "column": "CV_COL",
             }
-            if measurement_mode not in prefixes:
-                raise ValueError(f"Unknown measurement mode: {measurement_mode}")
             self.cv.set_measurement_time()
             self.cv.prepare_output_directory(prefix=prefixes[measurement_mode])
         return self.cv.get_out_dir()

@@ -843,7 +843,7 @@ class MainWindowTests(unittest.TestCase):
             self.assertEqual(first_path.parent.as_posix(), result_path)
             self.assertRegex(
                 first_path.name,
-                r"^IV_GUI_\d{4}-\d{2}-\d{2}T\d{6}_v0\.log$",
+                r"^IV_GUI_\d{4}-\d{2}-\d{2}T\d{6}\.log$",
             )
             self.assertNotEqual(first_path, second_path)
             self.assertRegex(
@@ -883,7 +883,7 @@ class MainWindowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as result_path:
             session = Path(result_path) / "IV_ROW_session"
             window._start_file_log(session)
-            (session / "IV_sensor_A00_v0.txt").write_text(
+            (session / "IV_sensor_A00.txt").write_text(
                 "measurement data\n",
                 encoding="utf-8",
             )
@@ -891,7 +891,7 @@ class MainWindowTests(unittest.TestCase):
 
             renamed = Path(result_path) / "IV_ROW_session_ABORTED"
             self.assertFalse(session.exists())
-            self.assertTrue((renamed / "IV_sensor_A00_v0.txt").is_file())
+            self.assertTrue((renamed / "IV_sensor_A00.txt").is_file())
             self.assertEqual(window._log_file_path.parent, renamed)
             self.assertIn(
                 f"Result path: {renamed}",
@@ -921,7 +921,7 @@ class MainWindowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as result_path:
             session = Path(result_path) / "CV_session"
             window._start_cv_file_log(session)
-            (session / "CV_sensor_A00_v0.txt").write_text(
+            (session / "CV_sensor_A00.txt").write_text(
                 "measurement data\n",
                 encoding="utf-8",
             )

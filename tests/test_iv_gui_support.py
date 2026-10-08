@@ -33,6 +33,9 @@ class FakeMeasurement:
     def set_measurement_time(self):
         pass
 
+    def set_measurement_kind(self, kind=None):
+        pass
+
     def prepare_output_directory(self, prefix="IV"):
         self.out_dir_path = "/tmp/result/measurement"
         return self.out_dir_path

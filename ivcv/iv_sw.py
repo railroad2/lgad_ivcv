@@ -131,6 +131,15 @@ class IV_sw:
 
     def prepare_output_directory(self, measurement_mode=None):
         """Create the IV session directory before instruments start measuring."""
+        kinds = {
+            None: None,
+            "channel": "PIXEL",
+            "row": "ROW",
+            "column": "COLUMN",
+        }
+        if measurement_mode not in kinds:
+            raise ValueError(f"Unknown measurement mode: {measurement_mode}")
+        self.iv.set_measurement_kind(kinds[measurement_mode])
         if not self.iv.get_out_dir():
             prefixes = {
                 None: "IV",
@@ -138,8 +147,6 @@ class IV_sw:
                 "row": "IV_ROW",
                 "column": "IV_COL",
             }
-            if measurement_mode not in prefixes:
-                raise ValueError(f"Unknown measurement mode: {measurement_mode}")
             self.iv.set_measurement_time()
             self.iv.prepare_output_directory(prefix=prefixes[measurement_mode])
         return self.iv.get_out_dir()

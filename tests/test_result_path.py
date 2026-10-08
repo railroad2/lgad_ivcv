@@ -1,7 +1,9 @@
 import os
+import tempfile
 import unittest
 from unittest.mock import patch
 
+from lgad_ivcv.ivcv.Measurement import Measurement
 from lgad_ivcv.ivcv.config import (
     resolve_result_path,
     resolve_switching_matrix_uri,
@@ -49,6 +51,23 @@ class SwitchingMatrixUriTests(unittest.TestCase):
                 resolve_switching_matrix_uri("/dev/ttyACM0"),
                 "/dev/ttyACM0",
             )
+
+
+class UniqueFilePathTests(unittest.TestCase):
+    def test_version_is_added_only_when_name_is_taken(self):
+        measurement = Measurement()
+        with tempfile.TemporaryDirectory() as out_dir:
+            measurement.out_dir_path = out_dir
+            names = []
+            for _ in range(3):
+                path = measurement.get_unique_file_path("IV_sensor_A00")
+                names.append(os.path.basename(path))
+                open(path + ".txt", "w").close()
+
+        self.assertEqual(
+            names,
+            ["IV_sensor_A00", "IV_sensor_A00_v1", "IV_sensor_A00_v2"],
+        )
 
 
 if __name__ == "__main__":

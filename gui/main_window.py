@@ -1290,7 +1290,8 @@ class MainWindow(QMainWindow):
 
         version = 0
         while True:
-            path = directory / f"IV_GUI_{timestamp}_v{version}.log"
+            version_suffix = f"_v{version}" if version else ""
+            path = directory / f"IV_GUI_{timestamp}{version_suffix}.log"
             try:
                 path.touch(exist_ok=False)
             except FileExistsError:
@@ -1310,7 +1311,8 @@ class MainWindow(QMainWindow):
 
         version = 0
         while True:
-            path = directory / f"CV_GUI_{timestamp}_v{version}.log"
+            version_suffix = f"_v{version}" if version else ""
+            path = directory / f"CV_GUI_{timestamp}{version_suffix}.log"
             try:
                 path.touch(exist_ok=False)
             except FileExistsError:

@@ -6,6 +6,7 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal, Slot
 
 from ..ivcv.cv_sw import CV_sw
+from ..util.util import target_text
 
 
 @dataclass(frozen=True)
@@ -62,7 +63,8 @@ class CVWorker(QObject):
             mode
         ]
         self.status_changed.emit(
-            f"Measuring CV {target_name} {target} ({index + 1}/{total})"
+            f"Measuring CV {target_name} {target_text(mode, target)} "
+            f"({index + 1}/{total})"
         )
         self._publish_measurement_status("running", target, index, total)
 

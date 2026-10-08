@@ -9,7 +9,9 @@ from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
 from ..inst import Keithley2400, Keithley2470, Keithley6487
-from ..util.util import col_label, row_label, rowcol2nch
+from ..util.util import (
+    channel_label, col_label, row_label, rowcol2nch, target_text,
+)
 
 
 _DEFAULT_PORT = object()
@@ -231,7 +233,7 @@ class IV_sw:
 
                 if verbose:
                     print("-" * 60)
-                    print(f"Switch channel: {channel} ({row}, {col})")
+                    print(f"Switch channel: {channel_label(channel)}")
 
                 if on_channel_start is not None:
                     on_channel_start(channel, index, len(channels))
@@ -302,7 +304,7 @@ class IV_sw:
 
                 if verbose:
                     print("-"*60)
-                    print(f"Switch row: {row}")
+                    print(f"Switch row: {target_text('row', row)}")
 
                 if on_row_start is not None:
                     on_row_start(row, index, len(rows))

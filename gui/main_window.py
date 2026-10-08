@@ -35,6 +35,7 @@ from ..ivcv.config import (
     resolve_result_path,
     resolve_switching_matrix_uri,
 )
+from ..util.util import target_text
 from .channel_grid import ChannelGrid
 from .cv_worker import CVRunConfig, CVWorker
 from .instrument_finder import InstrumentFinder
@@ -1107,14 +1108,17 @@ class MainWindow(QMainWindow):
         self.channel_progress.setValue(index)
         singular = self.MODE_LABELS[mode][0]
         self._append_log(
-            f"{singular} {target} measurement started ({index + 1}/{total})."
+            f"{singular} {target_text(mode, target)} measurement started "
+            f"({index + 1}/{total})."
         )
 
     def _target_completed(self, mode, target, index, total):
         self.channel_progress.setValue(index + 1)
         self.channel_grid.mark_completed(mode, target)
         singular = self.MODE_LABELS[mode][0]
-        self._append_log(f"{singular} {target} measurement completed.")
+        self._append_log(
+            f"{singular} {target_text(mode, target)} measurement completed."
+        )
 
     def _cv_target_started(self, mode, target, index, total):
         self._cv_plot_voltage.clear()
@@ -1127,14 +1131,18 @@ class MainWindow(QMainWindow):
         self.cv_channel_progress.setValue(index)
         singular = self.MODE_LABELS[mode][0]
         self._append_cv_log(
-            f"{singular} {target} CV measurement started ({index + 1}/{total})."
+            f"{singular} {target_text(mode, target)} CV measurement started "
+            f"({index + 1}/{total})."
         )
 
     def _cv_target_completed(self, mode, target, index, total):
         self.cv_channel_progress.setValue(index + 1)
         self.channel_grid.mark_completed(mode, target)
         singular = self.MODE_LABELS[mode][0]
-        self._append_cv_log(f"{singular} {target} CV measurement completed.")
+        self._append_cv_log(
+            f"{singular} {target_text(mode, target)} "
+            "CV measurement completed."
+        )
 
     def _point_measured(
         self,
@@ -1154,7 +1162,7 @@ class MainWindow(QMainWindow):
         self._refresh_plot()
         singular = self.MODE_LABELS[mode][0]
         self.statusBar().showMessage(
-            f"{singular} {target}: {voltage:.1f} V, PAU {current_pau:.4g} A, "
+            f"{singular} {target_text(mode, target)}: {voltage:.1f} V, PAU {current_pau:.4g} A, "
             f"SMU {current_smu:.4g} A"
         )
 
@@ -1189,7 +1197,7 @@ class MainWindow(QMainWindow):
         self._refresh_cv_plot()
         singular = self.MODE_LABELS[mode][0]
         self.statusBar().showMessage(
-            f"{singular} {target}: {voltage:.1f} V, "
+            f"{singular} {target_text(mode, target)}: {voltage:.1f} V, "
             f"C {capacitance * 1e12:.4g} pF, R {resistance:.4g} Ohm, "
             f"PAU {current_pau:.4g} A"
         )

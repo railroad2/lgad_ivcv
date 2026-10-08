@@ -74,6 +74,21 @@ def rowcol2label(row, col):
     return f"{row_label(row)}{col_label(col)}"
 
 
+def channel_label(channel, ncol=16):
+    """Return a channel with its matrix label: 0 -> '0 (A00)'."""
+    row, col = divmod(int(channel), ncol)
+    return f"{channel} ({rowcol2label(row, col)})"
+
+
+def target_text(mode, target):
+    """Return a measurement target for logs: '18 (B02)', '2 (C)', or '3'."""
+    if mode == "channel":
+        return channel_label(target)
+    if mode == "row":
+        return f"{target} ({row_label(int(target))})"
+    return str(target)
+
+
 def rowcol2nch(rowcol, ncol=16):
     try:
         iter(rowcol[0])

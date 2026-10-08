@@ -6,6 +6,7 @@ from typing import Optional
 from PySide6.QtCore import QObject, Signal, Slot
 
 from ..ivcv.iv_sw import IV_sw
+from ..util.util import target_text
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,7 @@ class IVWorker(QObject):
     @staticmethod
     def _target_name(mode, target):
         names = {"channel": "channel", "row": "row", "column": "column"}
-        return f"{names[mode]} {target}"
+        return f"{names[mode]} {target_text(mode, target)}"
 
     def _target_started(self, target, index, total):
         mode = self.config.measurement_mode

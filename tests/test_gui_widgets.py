@@ -858,6 +858,23 @@ class MainWindowTests(unittest.TestCase):
 
         window.close()
 
+    def test_channel_log_shows_matrix_label(self):
+        window = MainWindow()
+
+        window._target_started("channel", 18, 0, 2)
+        window._target_completed("channel", 18, 0, 2)
+        window._cv_target_started("row", 2, 0, 1)
+
+        log = window.log_edit.toPlainText()
+        self.assertIn("Channel 18 (B02) measurement started (1/2).", log)
+        self.assertIn("Channel 18 (B02) measurement completed.", log)
+        self.assertIn(
+            "Row 2 (C) CV measurement started (1/1).",
+            window.cv_log_edit.toPlainText(),
+        )
+
+        window.close()
+
     def test_completed_log_only_session_gets_logonly_suffix(self):
         window = MainWindow()
 

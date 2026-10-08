@@ -1443,15 +1443,17 @@ class MainWindow(QMainWindow):
                 self.cv_pau_enable_check.isChecked()
             )
 
+    def _visa_resource_edits(self):
+        edits = (self.smu_edit, self.pau_edit, self.cv_lcr_edit, self.cv_pau_edit)
+        return dict(zip(self.VISA_RESOURCE_SETTING_KEYS, edits))
+
     def _load_settings(self):
-        for key in self.VISA_RESOURCE_SETTING_KEYS:
-            self._settings.remove(key)
         if SWITCHING_MATRIX_URI_ENV not in os.environ:
             self.port_edit.setText(
                 self._settings.value("iv/port", resolve_switching_matrix_uri())
             )
-        self.smu_edit.clear()
-        self.pau_edit.clear()
+        for key, edit in self._visa_resource_edits().items():
+            edit.setText(self._settings.value(key, "") or "")
         self.pau_enable_check.setChecked(
             self._settings.value("iv/pau_enabled", False, type=bool)
         )
@@ -1497,8 +1499,6 @@ class MainWindow(QMainWindow):
             self.cv_port_edit.setText(
                 self._settings.value("cv/port", resolve_switching_matrix_uri())
             )
-        self.cv_lcr_edit.clear()
-        self.cv_pau_edit.clear()
         self.cv_pau_enable_check.setChecked(
             self._settings.value("cv/pau_enabled", False, type=bool)
         )
@@ -1546,8 +1546,8 @@ class MainWindow(QMainWindow):
 
     def _save_settings(self):
         self._settings.setValue("iv/port", self.port_edit.text())
-        for key in self.VISA_RESOURCE_SETTING_KEYS:
-            self._settings.remove(key)
+        for key, edit in self._visa_resource_edits().items():
+            self._settings.setValue(key, edit.text().strip())
         self._settings.setValue("sensor_name", self.sensor_edit.text())
         self._settings.remove("iv/sensor")
         self._settings.remove("cv/sensor")

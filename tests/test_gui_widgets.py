@@ -766,35 +766,28 @@ class MainWindowTests(unittest.TestCase):
         window.close()
         QSettings().clear()
 
-    def test_visa_resources_are_not_persisted_in_qsettings(self):
+    def test_visa_resources_are_restored_from_last_session(self):
         settings = QSettings()
-        for key in MainWindow.VISA_RESOURCE_SETTING_KEYS:
-            settings.setValue(key, "ASRL/dev/ttyUSB9::INSTR")
+        settings.clear()
 
         window = MainWindow()
-
         self.assertEqual(window.smu_edit.text(), "")
-        self.assertEqual(window.pau_edit.text(), "")
         self.assertEqual(window.cv_lcr_edit.text(), "")
-        self.assertEqual(window.cv_pau_edit.text(), "")
-        self.assertTrue(
-            all(
-                not settings.contains(key)
-                for key in MainWindow.VISA_RESOURCE_SETTING_KEYS
-            )
-        )
 
-        window.smu_edit.setText("ASRL/dev/ttyUSB0::INSTR")
-        window.cv_lcr_edit.setText("ASRL/dev/ttyUSB1::INSTR")
+        window.smu_edit.setText("GPIB0::18::INSTR")
+        window.pau_edit.setText("GPIB0::23::INSTR")
+        window.cv_lcr_edit.setText("GPIB0::6::INSTR")
+        window.cv_pau_edit.setText("")
         window._save_settings()
-        self.assertTrue(
-            all(
-                not settings.contains(key)
-                for key in MainWindow.VISA_RESOURCE_SETTING_KEYS
-            )
-        )
-
         window.close()
+
+        restored = MainWindow()
+        self.assertEqual(restored.smu_edit.text(), "GPIB0::18::INSTR")
+        self.assertEqual(restored.pau_edit.text(), "GPIB0::23::INSTR")
+        self.assertEqual(restored.cv_lcr_edit.text(), "GPIB0::6::INSTR")
+        self.assertEqual(restored.cv_pau_edit.text(), "")
+
+        restored.close()
         settings.clear()
 
     def test_channel_window_title_does_not_follow_measurement_mode(self):

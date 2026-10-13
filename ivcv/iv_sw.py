@@ -6,27 +6,15 @@ from .IVMeasurement import IVMeasurement
 from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
-from ..inst import Keithley2400, Keithley2470, Keithley6487
-from ..inst.instbase import InstError
-from ..inst.backend import InstrumentBackend, query_identity
+from ..inst import Keithley2400, Keithley6487
+from ..inst.backend import InstrumentBackend
+from ..inst.smu import SMU_DRIVERS, open_smu
 from ..util.util import (
     channel_label, col_label, row_label, rowcol2nch, target_text,
 )
 
 
 _DEFAULT_PORT = object()
-_SMU_DRIVERS = (Keithley2400, Keithley2470)
-
-
-def _smu_driver_for_identity(identity):
-    identity = identity.upper()
-    if "MODEL 2470" in identity:
-        return Keithley2470
-    if "MODEL 2400" in identity or "MODEL 2410" in identity:
-        return Keithley2400
-    raise ValueError(f"Unsupported SMU: {identity.strip()}")
-
-
 class IV_sw:
 
     def __init__(self, port=_DEFAULT_PORT, dryrun=False):
@@ -99,29 +87,25 @@ class IV_sw:
 
         if smu_rsrc is None:
             print ('Looking for the SMU')
-            for driver_type in _SMU_DRIVERS:
+            for driver_type in SMU_DRIVERS:
                 candidate = driver_type()
                 smu_rsrc = candidate.find_inst()
                 if smu_rsrc is not None:
                     self.smu = candidate
                     break
+            if smu_rsrc is not None:
+                self.smu.open(
+                    smu_rsrc,
+                    backend=self._get_instrument_backend(),
+                )
         else:
-            try:
-                read_termination = "\r" if "ttyUSB" in smu_rsrc else None
-                identity = query_identity(smu_rsrc, read_termination)
-            except Exception as exc:
-                raise InstError(
-                    f"No *IDN? response from {smu_rsrc}: {exc}"
-                ) from exc
-            self.smu = _smu_driver_for_identity(identity)()
-            self.smu.found_idn = identity
-
-        self.smu_rsrc = smu_rsrc
-        if smu_rsrc is not None:
-            self.smu.open(
+            self.smu = open_smu(
                 smu_rsrc,
                 backend=self._get_instrument_backend(),
             )
+
+        self.smu_rsrc = smu_rsrc
+        if smu_rsrc is not None:
             print (f'SMU is connected: {smu_rsrc}')
 
     def set_pau(self, pau_rsrc=None):

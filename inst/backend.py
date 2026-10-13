@@ -161,9 +161,11 @@ class InstrumentBackend:
             raise errors[0]
 
 
-def query_identity(resource_name, read_termination=None):
+def query_identity(resource_name, read_termination=None, backend=None):
     """Query ``*IDN?`` using the backend selected for *resource_name*."""
-    backend = InstrumentBackend()
+    owns_backend = backend is None
+    if backend is None:
+        backend = InstrumentBackend()
     resource = None
     try:
         options = {}
@@ -176,4 +178,5 @@ def query_identity(resource_name, read_termination=None):
             if resource is not None:
                 resource.close()
         finally:
-            backend.close()
+            if owns_backend:
+                backend.close()

@@ -158,6 +158,11 @@ matches the expected instrument model. Keithley 2400 and 2410 instruments use
 the `Keithley2400` driver; the 2470 uses its dedicated driver. Resources using
 another connection type or device name must be supplied explicitly.
 
+Before enabling the SMU output, IV measurement validates the complete sweep
+against the detected model and selects the smallest suitable voltage range.
+The 2400 is limited to 200 V. The 2410 and 2470 use a 1000 V nominal range and
+accept sweep magnitudes up to 1100 V.
+
 IV measurement requires the SMU for voltage bias and can also use the
 picoammeter for an additional current reading. CV measurement requires the LCR
 meter. The PAU is optional for CV. When `--pau` is omitted, the LCR meter

@@ -159,9 +159,11 @@ the address number or its complete resource name:
 ```bash
 python3 scripts/check_gpib.py 24
 python3 scripts/check_gpib.py 'GPIB0::24::INSTR'
+python3 scripts/check_gpib.py 24 --timeout 0.3
 ```
 
-The command prints the normalized resource name and its `*IDN?` reply.
+The command prints the normalized resource name and its `*IDN?` reply. Its
+default GPIB timeout is 1 second; use `--timeout` to shorten or extend it.
 
 Automatic detection examines serial PyVISA resources whose names contain
 `ttyUSB` and scans NI GPIB-USB-HS primary addresses 1 through 30. It queries

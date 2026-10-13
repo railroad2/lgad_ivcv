@@ -209,13 +209,13 @@ class ScriptLifecycleTests(unittest.TestCase):
         output = StringIO()
         with patch.object(
             check_gpib,
-            "query_identity",
+            "query_gpib_identity",
             return_value="KEITHLEY INSTRUMENTS INC.,MODEL 2410",
         ) as identify, redirect_stdout(output):
             result = check_gpib.main(["24"])
 
         self.assertEqual(result, 0)
-        identify.assert_called_once_with("GPIB0::24::INSTR")
+        identify.assert_called_once_with("GPIB0::24::INSTR", 1.0)
         self.assertEqual(
             output.getvalue().strip(),
             "GPIB0::24::INSTR: KEITHLEY INSTRUMENTS INC.,MODEL 2410",
@@ -225,7 +225,7 @@ class ScriptLifecycleTests(unittest.TestCase):
         errors = StringIO()
         with patch.object(
             check_gpib,
-            "query_identity",
+            "query_gpib_identity",
             side_effect=TimeoutError("no listener"),
         ), redirect_stderr(errors):
             result = check_gpib.main(["GPIB0::6::INSTR"])
@@ -233,6 +233,17 @@ class ScriptLifecycleTests(unittest.TestCase):
         self.assertEqual(result, 1)
         self.assertIn("GPIB0::6::INSTR", errors.getvalue())
         self.assertIn("no listener", errors.getvalue())
+
+    def test_gpib_check_accepts_shorter_timeout(self):
+        with patch.object(
+            check_gpib,
+            "query_gpib_identity",
+            return_value="KEITHLEY INSTRUMENTS INC.,MODEL 2470",
+        ) as identify, redirect_stdout(StringIO()):
+            result = check_gpib.main(["24", "--timeout", "0.3"])
+
+        self.assertEqual(result, 0)
+        identify.assert_called_once_with("GPIB0::24::INSTR", 0.3)
 
     def test_smu_sweep_generates_endpoint_in_both_directions(self):
         np.testing.assert_allclose(

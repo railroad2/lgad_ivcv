@@ -79,6 +79,26 @@ class InstrumentBackendTests(unittest.TestCase):
         self.assertEqual(controller.close_count, 1)
         visa_factory.assert_not_called()
 
+    def test_gpib_timeout_is_passed_to_ni_controller(self):
+        controller = FakeGPIBController()
+        gpib_factory = Mock(return_value=controller)
+        backend = InstrumentBackend(
+            gpib_controller_factory=gpib_factory,
+            gpib_timeout_seconds=1.0,
+        )
+
+        backend.open_resource("GPIB0::18::INSTR")
+        backend.close()
+
+        gpib_factory.assert_called_once_with(
+            timeout_usec=1_000_000,
+            usb_timeout_ms=1500,
+        )
+
+    def test_gpib_timeout_must_be_positive(self):
+        with self.assertRaisesRegex(ValueError, "greater than zero"):
+            InstrumentBackend(gpib_timeout_seconds=0)
+
     def test_serial_resource_uses_pyvisa(self):
         resource = Mock()
         visa_manager = FakeVisaManager(resource=resource)

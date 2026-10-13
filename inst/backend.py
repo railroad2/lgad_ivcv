@@ -1,6 +1,7 @@
 """Instrument backend selection for VISA serial and NI GPIB-USB-HS."""
 
 import importlib
+import math
 import re
 
 import pyvisa
@@ -76,11 +77,20 @@ class InstrumentBackend:
         self,
         visa_manager_factory=None,
         gpib_controller_factory=None,
+        gpib_timeout_seconds=None,
     ):
         self._visa_manager_factory = (
             visa_manager_factory or pyvisa.ResourceManager
         )
         self._gpib_controller_factory = gpib_controller_factory
+        if gpib_timeout_seconds is not None:
+            gpib_timeout_seconds = float(gpib_timeout_seconds)
+            if (
+                not math.isfinite(gpib_timeout_seconds)
+                or gpib_timeout_seconds <= 0
+            ):
+                raise ValueError("GPIB timeout must be greater than zero")
+        self._gpib_timeout_seconds = gpib_timeout_seconds
         self._visa_manager = None
         self._gpib_controller = None
         self._closed = False
@@ -95,7 +105,18 @@ class InstrumentBackend:
             factory = self._gpib_controller_factory
             if factory is None:
                 factory = _load_ni_gpib_controller()
-            self._gpib_controller = factory()
+            if self._gpib_timeout_seconds is None:
+                self._gpib_controller = factory()
+            else:
+                timeout_usec = round(self._gpib_timeout_seconds * 1_000_000)
+                usb_timeout_ms = max(
+                    1000,
+                    round(self._gpib_timeout_seconds * 1000) + 500,
+                )
+                self._gpib_controller = factory(
+                    timeout_usec=timeout_usec,
+                    usb_timeout_ms=usb_timeout_ms,
+                )
         return self._gpib_controller
 
     def open_resource(self, resource_name, **options):

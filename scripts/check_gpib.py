@@ -8,7 +8,11 @@ from pathlib import Path
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from lgad_ivcv.inst.backend import parse_gpib_resource, query_identity
+from lgad_ivcv.inst.backend import (
+    InstrumentBackend,
+    parse_gpib_resource,
+    query_identity,
+)
 
 
 def gpib_resource(value):
@@ -30,6 +34,26 @@ def gpib_resource(value):
     return f"GPIB{board}::{address}::INSTR"
 
 
+def positive_timeout(value):
+    """Parse a positive timeout in seconds for argparse."""
+    try:
+        timeout = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("timeout must be a number") from exc
+    if timeout <= 0:
+        raise argparse.ArgumentTypeError("timeout must be greater than zero")
+    return timeout
+
+
+def query_gpib_identity(resource_name, timeout):
+    """Query one GPIB address using a short controller transfer timeout."""
+    backend = InstrumentBackend(gpib_timeout_seconds=timeout)
+    try:
+        return query_identity(resource_name, backend=backend)
+    finally:
+        backend.close()
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         description="Query *IDN? at one NI GPIB-USB-HS address"
@@ -39,13 +63,19 @@ def build_parser():
         type=gpib_resource,
         help="primary address (for example 24 or GPIB0::24::INSTR)",
     )
+    parser.add_argument(
+        "--timeout",
+        type=positive_timeout,
+        default=1.0,
+        help="GPIB response timeout in seconds (default: 1.0)",
+    )
     return parser
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
-        identity = query_identity(args.address)
+        identity = query_gpib_identity(args.address, args.timeout)
         if not identity:
             raise RuntimeError("empty *IDN? response")
     except Exception as exc:

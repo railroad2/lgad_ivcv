@@ -7,6 +7,9 @@ class Keithley2400(InstBase):
     _read_termination = '\r'
     _verify_msg = ("MODEL 2400", "MODEL 2410")
 
+    _MODEL_2400_RANGES = (0.2, 2, 20, 200)
+    _MODEL_2410_RANGES = (20, 100, 1000)
+
     def __init__(self, rname=None, read_termination=None, verify_msg=None):
         if read_termination:
             self._read_termination = read_termination
@@ -26,12 +29,43 @@ class Keithley2400(InstBase):
         self.write(":SENS:FUNC \"CURR\"")
         self.write(":FORM:ELEM VOLT,CURR")
 
-        self.set_voltage_range(1000)
+        self.set_voltage_range(self._voltage_ranges()[-1])
         self.set_current_limit(10E-6)
         self.sleep(0.5)
         self.set_voltage(0)
 
         return
+
+    def _is_model_2410(self):
+        return "MODEL 2410" in getattr(self, "found_idn", "").upper()
+
+    def _voltage_ranges(self):
+        if self._is_model_2410():
+            return self._MODEL_2410_RANGES
+        return self._MODEL_2400_RANGES
+
+    def get_max_source_voltage(self):
+        """Return the maximum allowed sweep magnitude for the connected model."""
+        return 1100 if self._is_model_2410() else 200
+
+    def configure_voltage_sweep(self, voltages):
+        """Validate a sweep and select the smallest suitable source range."""
+        requested = max((abs(float(voltage)) for voltage in voltages), default=0)
+        maximum = self.get_max_source_voltage()
+        if requested > maximum:
+            model = "2410" if self._is_model_2410() else "2400"
+            raise ValueError(
+                f"Keithley {model} sweep exceeds its {maximum} V limit: "
+                f"{requested} V requested"
+            )
+
+        ranges = self._voltage_ranges()
+        selected_range = next(
+            (voltage_range for voltage_range in ranges if requested <= voltage_range),
+            ranges[-1],
+        )
+        self.set_voltage_range(selected_range)
+        return selected_range
         
     ## get functions 
     def get_voltage(self):

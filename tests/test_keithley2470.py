@@ -69,6 +69,22 @@ class Keithley2470Tests(unittest.TestCase):
             [":SOUR:VOLT -1.0", ":SOUR:VOLT -2.0", ":SOUR:VOLT -3"],
         )
 
+    def test_sweep_selects_smallest_suitable_voltage_range(self):
+        driver = self.make_driver()
+
+        selected_range = driver.configure_voltage_sweep([0, -150])
+
+        self.assertEqual(selected_range, 200)
+        self.assertEqual(driver._inst.writes, [":SOUR:VOLT:RANG 200"])
+
+    def test_sweep_rejects_more_than_1100_volts(self):
+        driver = self.make_driver()
+
+        with self.assertRaisesRegex(ValueError, "1100 V limit"):
+            driver.configure_voltage_sweep([0, -1101])
+
+        self.assertEqual(driver._inst.writes, [])
+
 
 if __name__ == "__main__":
     unittest.main()

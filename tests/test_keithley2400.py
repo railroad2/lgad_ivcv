@@ -44,6 +44,40 @@ class Keithley2400Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "greater than zero"):
             driver.set_voltage_ramp(-3, step=0)
 
+    def test_model_2400_initialization_uses_200_volt_range(self):
+        driver = self.make_driver()
+        driver.found_idn = "KEITHLEY INSTRUMENTS INC.,MODEL 2400"
+
+        driver.initialize()
+
+        self.assertIn(":SOUR:VOLT:RANG 200", driver._inst.writes)
+        self.assertNotIn(":SOUR:VOLT:RANG 1000", driver._inst.writes)
+
+    def test_model_2400_sweep_rejects_more_than_200_volts(self):
+        driver = self.make_driver()
+        driver.found_idn = "KEITHLEY INSTRUMENTS INC.,MODEL 2400"
+
+        with self.assertRaisesRegex(ValueError, "200 V limit"):
+            driver.configure_voltage_sweep([0, -201])
+
+        self.assertEqual(driver._inst.writes, [])
+
+    def test_model_2410_sweep_uses_1000_volt_nominal_range(self):
+        driver = self.make_driver()
+        driver.found_idn = "KEITHLEY INSTRUMENTS INC.,MODEL 2410"
+
+        selected_range = driver.configure_voltage_sweep([0, -250, -1100])
+
+        self.assertEqual(selected_range, 1000)
+        self.assertEqual(driver._inst.writes, [":SOUR:VOLT:RANG 1000"])
+
+    def test_model_2410_sweep_rejects_more_than_1100_volts(self):
+        driver = self.make_driver()
+        driver.found_idn = "KEITHLEY INSTRUMENTS INC.,MODEL 2410"
+
+        with self.assertRaisesRegex(ValueError, "1100 V limit"):
+            driver.configure_voltage_sweep([0, -1101])
+
 
 if __name__ == "__main__":
     unittest.main()

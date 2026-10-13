@@ -9,6 +9,8 @@ class Keithley2470(InstBase):
     _read_termination = "\n"
     _write_termination = "\n"
     _verify_msg = "MODEL 2470"
+    _VOLTAGE_RANGES = (20, 200, 1000)
+    _MAX_SOURCE_VOLTAGE = 1100
 
     def __init__(self, rname=None, read_termination=None, verify_msg=None):
         if read_termination is not None:
@@ -39,6 +41,30 @@ class Keithley2470(InstBase):
         self.set_current_limit(10e-6)
         self.sleep(0.5)
         self.set_voltage(0)
+
+    def get_max_source_voltage(self):
+        """Return the maximum allowed sweep magnitude for a 2470."""
+        return self._MAX_SOURCE_VOLTAGE
+
+    def configure_voltage_sweep(self, voltages):
+        """Validate a sweep and select the smallest suitable source range."""
+        requested = max((abs(float(voltage)) for voltage in voltages), default=0)
+        if requested > self._MAX_SOURCE_VOLTAGE:
+            raise ValueError(
+                "Keithley 2470 sweep exceeds its "
+                f"{self._MAX_SOURCE_VOLTAGE} V limit: {requested} V requested"
+            )
+
+        selected_range = next(
+            (
+                voltage_range
+                for voltage_range in self._VOLTAGE_RANGES
+                if requested <= voltage_range
+            ),
+            self._VOLTAGE_RANGES[-1],
+        )
+        self.set_voltage_range(selected_range)
+        return selected_range
 
     def get_voltage(self):
         return float(self.query(":SOUR:VOLT?"))

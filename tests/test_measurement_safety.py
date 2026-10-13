@@ -7,9 +7,18 @@ from lgad_ivcv.ivcv.IVMeasurement import IVMeasurement
 
 
 class FakeSMU:
-    def __init__(self, fail_ramp=False):
+    def __init__(self, fail_ramp=False, sweep_error=None):
         self.calls = []
         self.fail_ramp = fail_ramp
+        self.sweep_error = sweep_error
+
+    def configure_voltage_sweep(self, voltages):
+        self.calls.append(("configure_voltage_sweep", tuple(voltages)))
+        if self.sweep_error is not None:
+            raise self.sweep_error
+
+    def set_current_limit(self, current):
+        self.calls.append(("set_current_limit", current))
 
     def set_voltage_ramp(self, voltage):
         self.calls.append(("set_voltage_ramp", voltage))
@@ -95,6 +104,21 @@ class MeasurementSafetyTest(unittest.TestCase):
         measurement._ensure_output_off()
 
         self.assertIn(("set_voltage", 0), measurement.smu.calls)
+        self.assertEqual(measurement.smu.calls[-1], ("set_output", "off"))
+
+    def test_invalid_sweep_is_rejected_before_output_is_enabled(self):
+        measurement = IVMeasurement()
+        measurement.return_sweep = False
+        measurement.initial_voltage = 0
+        measurement.final_voltage = -201
+        measurement.smu = FakeSMU(
+            sweep_error=ValueError("Keithley 2400 sweep exceeds its 200 V limit")
+        )
+
+        with self.assertRaisesRegex(ValueError, "200 V limit"):
+            measurement.start_measurement()
+
+        self.assertNotIn(("set_output", "on"), measurement.smu.calls)
         self.assertEqual(measurement.smu.calls[-1], ("set_output", "off"))
 
     def test_cv_failure_disables_both_bias_sources(self):

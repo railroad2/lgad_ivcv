@@ -71,11 +71,6 @@ class IVMeasurement(Measurement):
 
     def _initialize_smu(self):
         self.smu.initialize()
-        self.smu.set_voltage(0)
-        self.smu.set_voltage_range(1000)
-        self.smu.set_current_limit(10e-6)
-        self.smu.sleep(0.5)
-        self.smu.set_voltage(0)
         self.smu.set_front_rear('rear')
     
     def set_pau(self, pau_visa_resource=None):
@@ -168,6 +163,7 @@ class IVMeasurement(Measurement):
     def start_measurement(self, reset_event=True):
         try:
             self._make_voltage_array(self.initial_voltage, self.final_voltage)
+            self.smu.configure_voltage_sweep(self.voltage_array)
 
             self.smu.set_current_limit(self.current_compliance)
             time.sleep(0.5)

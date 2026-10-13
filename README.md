@@ -10,6 +10,11 @@ Install the dependencies from the repository directory:
 python3 -m pip install -r requirements.txt
 ```
 
+GPIB instruments use the NI GPIB-USB-HS userspace driver directly. Install
+the separately distributed `ni_gpib_usb_hs` module in the same Python
+environment before connecting GPIB instruments. PyVISA remains the backend
+for serial resources such as `ASRL/dev/ttyUSB0::INSTR`.
+
 The `swm_ctrl` package must be importable for WebSocket switching-matrix
 control. If `lgad_ivcv` and `swm_ctrl` are sibling repositories, add their
 common parent directory to `PYTHONPATH`:
@@ -110,7 +115,9 @@ the `.txt` and `.png` extensions.
 
 ### Measuring instruments
 
-The measurement programs use PyVISA resource names to open the instruments:
+The measurement programs use VISA-style resource names. `GPIB0` resources are
+opened through `ni_gpib_usb_hs.NIUSBGPIB`; other resources are opened through
+PyVISA:
 
 | Measurement | Option | Instrument | VISA resource name |
 | --- | --- | --- | --- |
@@ -119,7 +126,7 @@ The measurement programs use PyVISA resource names to open the instruments:
 | CV | `--lcr` | Wayne Kerr 4300 LCR meter | Searched automatically when omitted |
 | CV | `--pau` | (Optional) Keithley 6487 picoammeter/bias source | Not searched automatically |
 
-List the VISA resources visible to Python with:
+List the non-GPIB VISA resources visible to Python with:
 
 ```bash
 python3 - <<'PY'
@@ -144,12 +151,12 @@ python3 scripts/cv_selected.py 0 17 255 \
     --pau 'ASRL/dev/ttyUSB1::INSTR'
 ```
 
-Automatic detection examines serial VISA resources whose names contain
-`ttyUSB` and GPIB VISA resources whose names start with `GPIB`, queries each
-device with `*IDN?`, and selects the resource whose identification matches the
-expected instrument model. Keithley 2400 and 2410 instruments use the
-`Keithley2400` driver; the 2470 uses its dedicated driver. Resources using
-another transport or device name must be supplied explicitly.
+Automatic detection examines serial PyVISA resources whose names contain
+`ttyUSB` and scans NI GPIB-USB-HS primary addresses 1 through 30. It queries
+each candidate with `*IDN?` and selects the resource whose identification
+matches the expected instrument model. Keithley 2400 and 2410 instruments use
+the `Keithley2400` driver; the 2470 uses its dedicated driver. Resources using
+another connection type or device name must be supplied explicitly.
 
 IV measurement requires the SMU for voltage bias and can also use the
 picoammeter for an additional current reading. CV measurement requires the LCR

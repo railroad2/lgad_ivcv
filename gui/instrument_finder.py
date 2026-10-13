@@ -1,8 +1,7 @@
-import pyvisa
-
 from PySide6.QtCore import QThread, Signal
 
 from ..inst import Keithley2400, Keithley2470, Keithley6487, WayneKerr4300
+from ..inst.backend import query_identity
 
 
 INSTRUMENT_FACTORIES = {
@@ -13,7 +12,7 @@ INSTRUMENT_FACTORIES = {
 
 
 class InstrumentFinder(QThread):
-    """Run blocking VISA discovery outside the GUI thread."""
+    """Run blocking instrument discovery outside the GUI thread."""
 
     found = Signal(str, str)
     not_found = Signal()
@@ -39,18 +38,7 @@ class InstrumentFinder(QThread):
 
     @staticmethod
     def _query_identity(resource_name, read_termination):
-        manager = pyvisa.ResourceManager()
-        resource = None
-        try:
-            resource = manager.open_resource(
-                resource_name,
-                read_termination=read_termination,
-            )
-            return resource.query("*IDN?").strip()
-        finally:
-            if resource is not None:
-                resource.close()
-            manager.close()
+        return query_identity(resource_name, read_termination)
 
     def _check_preferred_resource(self, instruments):
         if not self.preferred_resource:

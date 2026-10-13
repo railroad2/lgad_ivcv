@@ -1,5 +1,4 @@
 import numpy as np
-import pyvisa
 
 from .instbase import InstBase
 
@@ -81,4 +80,3 @@ class WayneKerr4300(InstBase):
     def get_output(self):
         ans = self.query(":MEAS:BIAS?")
         return ans
-

@@ -24,16 +24,25 @@ class SMUSelectionTests(unittest.TestCase):
         runner = IV_sw.__new__(IV_sw)
         runner.dryrun = False
         runner.smu = Keithley2400()
+        backend = object()
 
         with patch(
-            "lgad_ivcv.ivcv.iv_sw._query_visa_identity",
+            "lgad_ivcv.ivcv.iv_sw.query_identity",
             return_value="KEITHLEY INSTRUMENTS,MODEL 2470",
+        ) as identify, patch.object(
+            runner,
+            "_get_instrument_backend",
+            return_value=backend,
         ), patch.object(Keithley2470, "open") as open_instrument:
             runner.set_smu("GPIB0::18::INSTR")
 
         self.assertIsInstance(runner.smu, Keithley2470)
         self.assertEqual(runner.smu_rsrc, "GPIB0::18::INSTR")
-        open_instrument.assert_called_once_with("GPIB0::18::INSTR")
+        identify.assert_called_once_with("GPIB0::18::INSTR", None)
+        open_instrument.assert_called_once_with(
+            "GPIB0::18::INSTR",
+            backend=backend,
+        )
 
 
 if __name__ == "__main__":

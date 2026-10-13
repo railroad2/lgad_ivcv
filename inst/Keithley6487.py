@@ -4,7 +4,6 @@ import numpy as np
 
 import numpy as np
 import pylab as plt
-import pyvisa
 from .instbase import InstBase, InstError
 
 DEBUG=0

@@ -1,5 +1,4 @@
 import numpy as np
-import pyvisa
 
 from .instbase import InstBase
 

@@ -7,6 +7,7 @@ from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
 from ..inst import WayneKerr4300, Keithley6487
+from ..inst.backend import InstrumentBackend
 from ..util.util import col_label, row_label, rowcol2nch
 
 
@@ -34,20 +35,45 @@ class CV_sw:
         self.rt_plot = False
         self.dryrun = dryrun
         self._stop_requested = threading.Event()
+        self._instrument_backend = None
+
+    def _get_instrument_backend(self):
+        backend = getattr(self, "_instrument_backend", None)
+        if backend is None:
+            backend = InstrumentBackend()
+            self._instrument_backend = backend
+        return backend
 
     def set_switching_matrix(self, port):
         self.port = port
         self.swm.open(port)
 
     def close(self):
-        if self.swm.comm is None:
-            return
-        try:
-            self.swm.off_all()
-        except Exception as exc:
-            print(f"WARNING: failed to turn off all switches: {exc}")
-        finally:
-            self.swm.close()
+        swm = getattr(self, "swm", None)
+        if swm is not None and swm.comm is not None:
+            try:
+                swm.off_all()
+            except Exception as exc:
+                print(f"WARNING: failed to turn off all switches: {exc}")
+            finally:
+                swm.close()
+
+        for name in ("pau", "lcr"):
+            instrument = getattr(self, name, None)
+            if instrument is None:
+                continue
+            try:
+                instrument.close()
+            except Exception as exc:
+                print(f"WARNING: failed to close {name.upper()}: {exc}")
+
+        backend = getattr(self, "_instrument_backend", None)
+        self._instrument_backend = None
+        if backend is not None:
+            try:
+                backend.close()
+            except Exception as exc:
+                print(f"WARNING: failed to close instrument backend: {exc}")
 
     def __enter__(self):
         return self
@@ -66,7 +92,10 @@ class CV_sw:
 
         self.lcr_rsrc = lcr_rsrc
         if lcr_rsrc is not None:
-            self.lcr.open(lcr_rsrc)
+            self.lcr.open(
+                lcr_rsrc,
+                backend=self._get_instrument_backend(),
+            )
 
     def set_pau(self, pau_rsrc=None):
         if self.dryrun:
@@ -81,7 +110,10 @@ class CV_sw:
         self.pau_rsrc = pau_rsrc
         if pau_rsrc is not None:
             self.pau = Keithley6487()
-            self.pau.open(pau_rsrc)
+            self.pau.open(
+                pau_rsrc,
+                backend=self._get_instrument_backend(),
+            )
 
     def set_sensor_name(self, sname):
         self.sname = sname

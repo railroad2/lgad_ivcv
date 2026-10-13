@@ -74,23 +74,28 @@ class Keithley2400(InstBase):
         self.sleep()
         return
 
-    def set_voltage_ramp(self, v1, step=1):
-        self.sleep()
-        v0 = self.get_voltage()
-        varr = []
+    def set_voltage_ramp(self, target_voltage, step=1):
+        if not np.isfinite(step) or step <= 0:
+            raise ValueError("step must be greater than zero")
 
-        if (v1 - v0 > step):
-            varr = np.arange(v0, v1, abs(step))
+        start_voltage = self.get_voltage()
+        delta = target_voltage - start_voltage
+        if delta == 0:
+            self.set_voltage(target_voltage)
+            return
 
-        if (v0 - v1 > step):
-            varr = np.arange(v0, v1, abs(step))
-
-        for v in varr:
-            self.set_voltage(v) 
+        direction = 1 if delta > 0 else -1
+        signed_step = direction * abs(step)
+        ramp_voltages = np.arange(
+            start_voltage + signed_step,
+            target_voltage,
+            signed_step,
+        )
+        for voltage in ramp_voltages:
+            self.set_voltage(voltage)
             self.sleep()
 
-        self.set_voltage(v1)
-        return
+        self.set_voltage(target_voltage)
             
     def set_front_rear(self, opt):
         if opt.lower() == 'front':

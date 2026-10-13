@@ -119,6 +119,11 @@ class InstrumentBackend:
                 )
         return self._gpib_controller
 
+    def initialize_gpib_adapter(self):
+        """Initialize the NI GPIB adapter and return its serial number."""
+        controller = self._get_gpib_controller()
+        return getattr(controller, "serial", None)
+
     def open_resource(self, resource_name, **options):
         gpib_address = parse_gpib_resource(resource_name)
         if gpib_address is not None:

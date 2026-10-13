@@ -99,6 +99,19 @@ class InstrumentBackendTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "greater than zero"):
             InstrumentBackend(gpib_timeout_seconds=0)
 
+    def test_gpib_adapter_initialization_returns_serial(self):
+        controller = FakeGPIBController()
+        controller.serial = "01234567"
+        gpib_factory = Mock(return_value=controller)
+        backend = InstrumentBackend(gpib_controller_factory=gpib_factory)
+
+        serial = backend.initialize_gpib_adapter()
+        backend.close()
+
+        self.assertEqual(serial, "01234567")
+        gpib_factory.assert_called_once_with()
+        self.assertEqual(controller.close_count, 1)
+
     def test_serial_resource_uses_pyvisa(self):
         resource = Mock()
         visa_manager = FakeVisaManager(resource=resource)

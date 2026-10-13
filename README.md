@@ -153,6 +153,13 @@ python3 scripts/cv_selected.py 0 17 255 \
     --pau 'ASRL/dev/ttyUSB1::INSTR'
 ```
 
+Run `check_gpib.py` without an address to initialize only the USB adapter.
+This does not address or query any instrument:
+
+```bash
+python3 scripts/check_gpib.py
+```
+
 To check one known GPIB primary address without scanning the bus, pass either
 the address number or its complete resource name:
 

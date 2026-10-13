@@ -205,6 +205,43 @@ class ScriptLifecycleTests(unittest.TestCase):
                 with self.assertRaises(argparse.ArgumentTypeError):
                     check_gpib.gpib_resource(address)
 
+    def test_gpib_check_without_address_initializes_adapter_only(self):
+        output = StringIO()
+        with patch.object(
+            check_gpib,
+            "check_gpib_adapter",
+            return_value="01234567",
+        ) as check_adapter, patch.object(
+            check_gpib,
+            "query_gpib_identity",
+        ) as identify, redirect_stdout(output):
+            result = check_gpib.main([])
+
+        self.assertEqual(result, 0)
+        check_adapter.assert_called_once_with(1.0)
+        identify.assert_not_called()
+        self.assertEqual(
+            output.getvalue().splitlines(),
+            [
+                "NI GPIB-USB-HS: INITIALIZED",
+                "Serial: 01234567",
+                "Instrument connection: NOT CHECKED",
+            ],
+        )
+
+    def test_gpib_check_reports_adapter_failure(self):
+        errors = StringIO()
+        with patch.object(
+            check_gpib,
+            "check_gpib_adapter",
+            side_effect=RuntimeError("adapter failed the ready handshake"),
+        ), redirect_stderr(errors):
+            result = check_gpib.main([])
+
+        self.assertEqual(result, 1)
+        self.assertIn("NI GPIB-USB-HS", errors.getvalue())
+        self.assertIn("ready handshake", errors.getvalue())
+
     def test_gpib_check_queries_only_the_requested_address(self):
         output = StringIO()
         with patch.object(

@@ -1,10 +1,14 @@
+import argparse
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 from scripts import (
+    check_gpib,
     cv_all,
     cv_once,
     cv_selected,
@@ -186,6 +190,48 @@ class ScriptLifecycleTests(unittest.TestCase):
         )
         runner.swm.assert_not_called()
         runner.__exit__.assert_called_once()
+
+    def test_gpib_check_accepts_numeric_and_resource_addresses(self):
+        self.assertEqual(check_gpib.gpib_resource("24"), "GPIB0::24::INSTR")
+        self.assertEqual(
+            check_gpib.gpib_resource("gpib0::6::instr"),
+            "GPIB0::6::INSTR",
+        )
+
+    def test_gpib_check_rejects_invalid_addresses(self):
+        for address in ("0", "31", "GPIB1::6::INSTR", "ASRL1::INSTR"):
+            with self.subTest(address=address):
+                with self.assertRaises(argparse.ArgumentTypeError):
+                    check_gpib.gpib_resource(address)
+
+    def test_gpib_check_queries_only_the_requested_address(self):
+        output = StringIO()
+        with patch.object(
+            check_gpib,
+            "query_identity",
+            return_value="KEITHLEY INSTRUMENTS INC.,MODEL 2410",
+        ) as identify, redirect_stdout(output):
+            result = check_gpib.main(["24"])
+
+        self.assertEqual(result, 0)
+        identify.assert_called_once_with("GPIB0::24::INSTR")
+        self.assertEqual(
+            output.getvalue().strip(),
+            "GPIB0::24::INSTR: KEITHLEY INSTRUMENTS INC.,MODEL 2410",
+        )
+
+    def test_gpib_check_reports_connection_failure(self):
+        errors = StringIO()
+        with patch.object(
+            check_gpib,
+            "query_identity",
+            side_effect=TimeoutError("no listener"),
+        ), redirect_stderr(errors):
+            result = check_gpib.main(["GPIB0::6::INSTR"])
+
+        self.assertEqual(result, 1)
+        self.assertIn("GPIB0::6::INSTR", errors.getvalue())
+        self.assertIn("no listener", errors.getvalue())
 
     def test_smu_sweep_generates_endpoint_in_both_directions(self):
         np.testing.assert_allclose(

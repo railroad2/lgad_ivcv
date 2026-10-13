@@ -151,6 +151,16 @@ python3 scripts/cv_selected.py 0 17 255 \
     --pau 'ASRL/dev/ttyUSB1::INSTR'
 ```
 
+To check one known GPIB primary address without scanning the bus, pass either
+the address number or its complete resource name:
+
+```bash
+python3 scripts/check_gpib.py 24
+python3 scripts/check_gpib.py 'GPIB0::24::INSTR'
+```
+
+The command prints the normalized resource name and its `*IDN?` reply.
+
 Automatic detection examines serial PyVISA resources whose names contain
 `ttyUSB` and scans NI GPIB-USB-HS primary addresses 1 through 30. It queries
 each candidate with `*IDN?` and selects the resource whose identification

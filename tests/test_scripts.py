@@ -2,6 +2,7 @@ import argparse
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
@@ -267,9 +268,26 @@ class ScriptLifecycleTests(unittest.TestCase):
             result,
             [[0.0, 0.0, 1e-9], [-1.0, -1.0, 2e-9]],
         )
+        configured_voltages = smu.configure_voltage_sweep.call_args.args[0]
+        np.testing.assert_allclose(configured_voltages, [0, -1])
         smu.set_current_limit.assert_called_once_with(1e-6)
         self.assertEqual(smu.measure.call_count, 2)
         smu.set_voltage_ramp.assert_called_once_with(0)
+        self.assertEqual(smu.set_output.call_args_list[-1].args, ("off",))
+
+    def test_smu_sweep_validates_model_limit_before_enabling_output(self):
+        smu = MagicMock()
+        smu.configure_voltage_sweep.side_effect = ValueError(
+            "Keithley 2400 sweep exceeds its 200 V limit"
+        )
+
+        with self.assertRaisesRegex(ValueError, "200 V limit"):
+            smu_sweep.measure_sweep(smu, 0, -201, 1, 1e-6)
+
+        self.assertNotIn(
+            unittest.mock.call("on"),
+            smu.set_output.call_args_list,
+        )
         self.assertEqual(smu.set_output.call_args_list[-1].args, ("off",))
 
     def test_smu_only_sweep_ramps_from_zero_to_start_voltage(self):
@@ -313,6 +331,57 @@ class ScriptLifecycleTests(unittest.TestCase):
             self.assertTrue(text_path.is_file())
             self.assertTrue(text_path.with_suffix(".png").is_file())
             self.assertTrue(text_path.stem.endswith("_dark_run"))
+
+    def test_smu_sweep_finds_all_supported_driver_types(self):
+        first_driver = MagicMock()
+        first_driver.find_inst.return_value = None
+        second_driver = MagicMock()
+        second_driver.find_inst.return_value = "GPIB0::24::INSTR"
+
+        with patch.object(
+            smu_sweep,
+            "SMU_DRIVERS",
+            (lambda: first_driver, lambda: second_driver),
+        ):
+            resource = smu_sweep.find_smu_resource()
+
+        self.assertEqual(resource, "GPIB0::24::INSTR")
+        first_driver.find_inst.assert_called_once_with()
+        second_driver.find_inst.assert_called_once_with()
+
+    def test_smu_sweep_uses_identity_selected_driver(self):
+        smu = MagicMock()
+        smu.found_idn = "KEITHLEY INSTRUMENTS INC.,MODEL 2470,1234,1.0"
+        output_path = Path("/tmp/result.txt")
+
+        with patch.object(smu_sweep, "open_smu", return_value=smu) as opener, \
+                patch.object(
+                    smu_sweep,
+                    "measure_sweep",
+                    return_value=np.array([[0.0, 0.0, 1e-9]]),
+                ), patch.object(
+                    smu_sweep,
+                    "save_results",
+                    return_value=output_path,
+                ) as save_results:
+            result = smu_sweep.run_sweep(
+                0,
+                -1,
+                1,
+                1e-6,
+                "/tmp",
+                "sensor",
+                resource="GPIB0::24::INSTR",
+            )
+
+        self.assertEqual(result, output_path)
+        opener.assert_called_once_with("GPIB0::24::INSTR")
+        save_results.assert_called_once()
+        self.assertEqual(
+            save_results.call_args.kwargs["instrument_name"],
+            "Keithley 2470",
+        )
+        smu.close.assert_called_once_with()
 
 
 if __name__ == "__main__":

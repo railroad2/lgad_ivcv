@@ -94,22 +94,24 @@ python3 scripts/iv_once.py --sensorname sensor01
 python3 scripts/cv_once.py --sensorname sensor01
 ```
 
-To sweep and measure with only the Keithley 2400 SMU (without the switching
-matrix or picoammeter), use `smu_sweep.py`:
+To sweep and measure with only a Keithley 2400, 2410, or 2470 SMU (without the
+switching matrix or picoammeter), use `smu_sweep.py`:
 
 ```bash
 python3 scripts/smu_sweep.py \
     --sensorname sensor01 --Vstart 0 --Vend -100 --Vstep 1 \
-    --Icompliance 1e-5 --smu 'ASRL/dev/ttyUSB0::INSTR' \
+    --Icompliance 1e-5 --smu 'GPIB0::24::INSTR' \
     --postfix dark
 ```
 
-When `--smu` is omitted, the script searches for the Keithley 2400. Results
-contain the requested voltage, measured SMU voltage, and measured SMU current.
-Before measurement, the SMU ramps from 0 V to `--Vstart` in fixed 1 V
-increments, independently of `--Vstep`. The script also saves a PNG plot of
-`Ismu` versus `Vsmu`; the plot includes a linear fit, its `dI/dV` slope, and
-the reciprocal `dV/dI` value.
+When `--smu` is omitted, the script searches for a supported SMU. Supplying a
+resource connects only to that address. Results contain the requested voltage,
+measured SMU voltage, and measured SMU current. Before enabling the output, the
+script validates the requested voltages against the connected model's limit and
+selects a suitable source range. The SMU then ramps from 0 V to `--Vstart` in
+fixed 1 V increments, independently of `--Vstep`. The script also saves a PNG
+plot of `Ismu` versus `Vsmu`; the plot includes a linear fit, its `dI/dV` slope,
+and the reciprocal `dV/dI` value.
 The optional `--postfix` value is appended to both output filenames before
 the `.txt` and `.png` extensions.
 

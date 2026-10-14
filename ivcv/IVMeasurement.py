@@ -70,7 +70,10 @@ class IVMeasurement(Measurement):
             self.smu = None
 
     def _initialize_smu(self):
-        self.smu.initialize()
+        if isinstance(self.smu, Keithley2470):
+            self.smu.initialize(current_compliance=self.current_compliance)
+        else:
+            self.smu.initialize()
         # Preserve the front/rear terminal selection configured on the SMU.
     
     def set_pau(self, pau_visa_resource=None):

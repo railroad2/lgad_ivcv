@@ -214,8 +214,8 @@ class IV_sw:
         iv = self.iv
 
         iv.set_measurement_target_label(target_label)
-        iv.initialize_measurement(self.smu, self.pau, self.sname)
         iv.set_measurement_options(v0, v1, dv, Icomp, return_swp, col, row, rt_plot)
+        iv.initialize_measurement(self.smu, self.pau, self.sname)
         if self.stop_requested():
             return
         iv.event.clear()

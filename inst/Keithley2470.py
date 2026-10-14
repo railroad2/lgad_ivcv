@@ -38,18 +38,32 @@ class Keithley2470(InstBase):
                 "SCPI with '*LANG SCPI', then reboot the instrument."
             )
 
-    def initialize(self):
+    def initialize(self, current_compliance=10e-6):
+        """Initialize 2470 IV sourcing using the KNU fixed-current-range setup.
+
+        Keep the instrument's terminal selection and avoid a factory reset.
+        Source readback remains enabled for this driver's buffered read API.
+        """
+        if not np.isfinite(current_compliance) or current_compliance <= 0:
+            raise ValueError("current_compliance must be finite and greater than zero")
         self._ensure_scpi_mode()
         self.set_output("off")
         self.write(":SOUR:FUNC VOLT")
+        self.set_voltage(0)
+        self.set_voltage_range(1000)
+        self.set_current_limit(current_compliance)
+        self.write(":SENS:CURR:RANG:AUTO OFF")
+        self.write(f":SENS:CURR:RANG {current_compliance}")
+        self.write(':SENS:FUNC "VOLT"')
         self.write(':SENS:FUNC "CURR"')
         self.write(":SOUR:VOLT:READ:BACK ON")
-        self.write(":SENS:CURR:RANG:AUTO ON")
-
-        self.set_voltage_range(1000)
-        self.set_current_limit(10e-6)
-        self.sleep(0.5)
-        self.set_voltage(0)
+        error = self.query(":SYST:ERR?").strip()
+        try:
+            code = int(error.split(",", 1)[0])
+        except ValueError as exc:
+            raise InstError(f"Invalid Keithley 2470 error response: {error!r}") from exc
+        if code != 0:
+            raise InstError(f"Keithley 2470 initialization failed: {error}")
 
     def get_max_source_voltage(self):
         """Return the maximum allowed sweep magnitude for a 2470."""

@@ -11,6 +11,7 @@ import numpy as np
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from lgad_ivcv.inst import Keithley2470
 from lgad_ivcv.inst.smu import SMU_DRIVERS, open_smu
 from lgad_ivcv.ivcv.config import resolve_result_path
 
@@ -71,7 +72,10 @@ def measure_sweep(smu, vstart, vend, vstep, current_compliance,
     measurements = []
 
     try:
-        smu.initialize()
+        if isinstance(smu, Keithley2470):
+            smu.initialize(current_compliance=current_compliance)
+        else:
+            smu.initialize()
         smu.configure_voltage_sweep(voltages)
         smu.set_front_rear(terminals)
         smu.set_current_limit(current_compliance)

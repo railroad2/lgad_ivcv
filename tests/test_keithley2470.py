@@ -37,13 +37,29 @@ class Keithley2470Tests(unittest.TestCase):
 
         driver.initialize()
 
-        self.assertEqual(driver._inst.queries, ["*LANG?"])
+        self.assertEqual(driver._inst.queries, ["*LANG?", ":SYST:ERR?"])
         self.assertIn(":SOUR:FUNC VOLT", driver._inst.writes)
         self.assertIn(':SENS:FUNC "CURR"', driver._inst.writes)
         self.assertIn(":SOUR:VOLT:READ:BACK ON", driver._inst.writes)
         self.assertIn(":SOUR:VOLT:ILIM 1e-05", driver._inst.writes)
         self.assertIn(":SOUR:VOLT 0", driver._inst.writes)
         self.assertNotIn(":SENS:CURR:PROT 1e-05", driver._inst.writes)
+
+    def test_initialize_applies_user_compliance_and_fixed_current_range(self):
+        driver = self.make_driver({"*LANG?": "SCPI", ":SYST:ERR?": '0,"No error"'})
+        driver.initialize(current_compliance=100e-6)
+        self.assertIn(":SOUR:VOLT:ILIM 0.0001", driver._inst.writes)
+        self.assertIn(":SENS:CURR:RANG:AUTO OFF", driver._inst.writes)
+        self.assertIn(":SENS:CURR:RANG 0.0001", driver._inst.writes)
+        self.assertNotIn("*RST", driver._inst.writes)
+        self.assertFalse(any("ROUT:TERM" in c for c in driver._inst.writes))
+        self.assertNotIn(":OUTP ON", driver._inst.writes)
+
+    def test_initialize_rejects_instrument_error(self):
+        driver = self.make_driver({"*LANG?": "SCPI", ":SYST:ERR?": '-222,"Data out of range"'})
+        with self.assertRaisesRegex(InstError, "initialization failed"):
+            driver.initialize()
+        self.assertNotIn(":OUTP ON", driver._inst.writes)
 
     def test_initialize_rejects_tsp_mode(self):
         driver = self.make_driver({"*LANG?": "TSP\n"})

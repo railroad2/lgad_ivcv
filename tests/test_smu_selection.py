@@ -130,7 +130,7 @@ class SMUSelectionTests(unittest.TestCase):
             with self.subTest(driver=driver_type.__name__):
                 smu = driver_type()
                 smu._inst = Mock()
-                smu._inst.query.return_value = "SCPI"
+                smu._inst.query.side_effect = lambda command: "SCPI" if command == "*LANG?" else '0,"No error"'
                 with patch.object(smu, "sleep"):
                     measurement = IVMeasurement()
                     measurement.set_smu(smu)
@@ -151,7 +151,9 @@ class SMUSelectionTests(unittest.TestCase):
         open_selected_smu.assert_called_once_with(
             "ASRL/dev/ttyUSB0::INSTR"
         )
-        selected_smu.initialize.assert_called_once_with()
+        selected_smu.initialize.assert_called_once_with(
+            current_compliance=measurement.current_compliance
+        )
         selected_smu.set_front_rear.assert_not_called()
 
 

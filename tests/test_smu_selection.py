@@ -125,6 +125,19 @@ class SMUSelectionTests(unittest.TestCase):
         self.assertEqual(runner.smu_rsrc, "GPIB0::18::INSTR")
         open_selected_smu.assert_called_once_with("GPIB0::18::INSTR")
 
+    def test_measurement_initialization_preserves_smu_terminal_selection(self):
+        for driver_type in (Keithley2400, Keithley2470):
+            with self.subTest(driver=driver_type.__name__):
+                smu = driver_type()
+                smu._inst = Mock()
+                smu._inst.query.return_value = "SCPI"
+                with patch.object(smu, "sleep"):
+                    measurement = IVMeasurement()
+                    measurement.set_smu(smu)
+                commands = [args.args[0].upper() for args in smu._inst.write.call_args_list]
+                self.assertFalse(any("ROUT:TERM" in command for command in commands))
+                self.assertNotIn("*RST", commands)
+
     def test_iv_measurement_string_resource_uses_selected_driver(self):
         selected_smu = Mock(spec=Keithley2470)
         with patch(
@@ -139,7 +152,7 @@ class SMUSelectionTests(unittest.TestCase):
             "ASRL/dev/ttyUSB0::INSTR"
         )
         selected_smu.initialize.assert_called_once_with()
-        selected_smu.set_front_rear.assert_called_once_with("rear")
+        selected_smu.set_front_rear.assert_not_called()
 
 
 if __name__ == "__main__":

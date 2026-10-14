@@ -71,7 +71,7 @@ class IVMeasurement(Measurement):
 
     def _initialize_smu(self):
         self.smu.initialize()
-        self.smu.set_front_rear('rear')
+        # Preserve the front/rear terminal selection configured on the SMU.
     
     def set_pau(self, pau_visa_resource=None):
         if isinstance(pau_visa_resource, Keithley6487):

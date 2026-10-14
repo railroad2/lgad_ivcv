@@ -179,6 +179,15 @@ matches the expected instrument model. Keithley 2400 and 2410 instruments use
 the `Keithley2400` driver; the 2470 uses its dedicated driver. Resources using
 another connection type or device name must be supplied explicitly.
 
+Instrument discovery uses a temporary connection and releases it when the
+search finishes, including on failure. Matrix measurement opens the selected
+instruments when the first sweep starts, shares one GPIB controller across all
+selected channels, rows, or columns, and releases the connections when the
+measurement call finishes or fails. A standalone single sweep releases its
+connections at the end of that sweep. Configuring resource addresses does not
+keep an instrument connection open; SMU identity checks also release their
+temporary connection immediately.
+
 Before enabling the SMU output, IV measurement validates the complete sweep
 against the detected model and selects the smallest suitable voltage range.
 The 2400 is limited to 200 V. The 2410 and 2470 use a 1000 V nominal range and

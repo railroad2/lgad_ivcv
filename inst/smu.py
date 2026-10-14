@@ -22,8 +22,8 @@ def smu_driver_for_identity(identity):
     raise InstError(f"Unsupported SMU: {identity.strip()}")
 
 
-def open_smu(resource_name, backend=None):
-    """Identify and open a supported SMU at a VISA-style resource name."""
+def identify_smu(resource_name, backend=None):
+    """Identify a supported SMU without retaining a connection."""
     resource_text = str(resource_name)
     if resource_text.upper().startswith("ASRL") or "ttyUSB" in resource_text:
         read_terminations = ("\r", "\n")
@@ -50,5 +50,11 @@ def open_smu(resource_name, backend=None):
 
     driver = smu_driver_for_identity(identity)()
     driver.found_idn = identity
+    return driver
+
+
+def open_smu(resource_name, backend=None):
+    """Identify and open a supported SMU at a VISA-style resource name."""
+    driver = identify_smu(resource_name, backend=backend)
     driver.open(resource_name, backend=backend)
     return driver

@@ -112,7 +112,7 @@ class SMUSelectionTests(unittest.TestCase):
 
         selected_smu = Keithley2470()
         with patch(
-            "lgad_ivcv.ivcv.iv_sw.open_smu",
+            "lgad_ivcv.ivcv.iv_sw.identify_smu",
             return_value=selected_smu,
         ) as open_selected_smu, patch.object(
             runner,
@@ -123,10 +123,7 @@ class SMUSelectionTests(unittest.TestCase):
 
         self.assertIs(runner.smu, selected_smu)
         self.assertEqual(runner.smu_rsrc, "GPIB0::18::INSTR")
-        open_selected_smu.assert_called_once_with(
-            "GPIB0::18::INSTR",
-            backend=backend,
-        )
+        open_selected_smu.assert_called_once_with("GPIB0::18::INSTR")
 
     def test_iv_measurement_string_resource_uses_selected_driver(self):
         selected_smu = Mock(spec=Keithley2470)

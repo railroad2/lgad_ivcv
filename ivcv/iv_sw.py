@@ -8,7 +8,8 @@ from .config import resolve_switching_matrix_uri
 from ..swmat import SWmat
 from ..inst import Keithley2400, Keithley6487
 from ..inst.backend import InstrumentBackend
-from ..inst.smu import SMU_DRIVERS, open_smu
+from .instrument_session import measurement_session
+from ..inst.smu import SMU_DRIVERS, identify_smu
 from ..util.util import (
     channel_label, col_label, row_label, rowcol2nch, target_text,
 )
@@ -56,8 +57,14 @@ class IV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to turn off all switches: {exc}")
             finally:
-                swm.close()
+                try:
+                    swm.close()
+                except Exception as exc:
+                    print(f"WARNING: failed to close switching matrix: {exc}")
 
+        self._close_instruments()
+
+    def _close_instruments(self):
         for name in ("pau", "smu"):
             instrument = getattr(self, name, None)
             if instrument is None:
@@ -67,6 +74,11 @@ class IV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to close {name.upper()}: {exc}")
 
+        self._instruments_open = False
+        measurement = getattr(self, "iv", None)
+        if measurement is not None:
+            measurement.smu = None
+            measurement.pau = None
         backend = getattr(self, "_instrument_backend", None)
         self._instrument_backend = None
         if backend is not None:
@@ -74,6 +86,22 @@ class IV_sw:
                 backend.close()
             except Exception as exc:
                 print(f"WARNING: failed to close instrument backend: {exc}")
+
+    def _ensure_instruments(self):
+        if getattr(self, "_instruments_open", False):
+            return
+        resource = getattr(self, "smu_rsrc", None)
+        if not resource:
+            raise RuntimeError("No SMU resource configured")
+        backend = self._get_instrument_backend()
+        try:
+            self.smu.open(resource, backend=backend)
+            if self.pau is not None and getattr(self, "pau_rsrc", None):
+                self.pau.open(self.pau_rsrc, backend=backend)
+            self._instruments_open = True
+        except BaseException:
+            self._close_instruments()
+            raise
 
     def __enter__(self):
         return self
@@ -93,20 +121,12 @@ class IV_sw:
                 if smu_rsrc is not None:
                     self.smu = candidate
                     break
-            if smu_rsrc is not None:
-                self.smu.open(
-                    smu_rsrc,
-                    backend=self._get_instrument_backend(),
-                )
         else:
-            self.smu = open_smu(
-                smu_rsrc,
-                backend=self._get_instrument_backend(),
-            )
+            self.smu = identify_smu(smu_rsrc)
 
         self.smu_rsrc = smu_rsrc
         if smu_rsrc is not None:
-            print (f'SMU is connected: {smu_rsrc}')
+            print(f'SMU resource selected: {smu_rsrc}')
 
     def set_pau(self, pau_rsrc=None):
         if self.dryrun:
@@ -118,11 +138,7 @@ class IV_sw:
 
         self.pau_rsrc = pau_rsrc
         if pau_rsrc is not None:
-            self.pau.open(
-                pau_rsrc,
-                backend=self._get_instrument_backend(),
-            )
-            print (f'PAU is connected: {pau_rsrc}')
+            print(f'PAU resource selected: {pau_rsrc}')
 
     def disable_pau(self):
         """Disable optional PAU use for this IV measurement session."""
@@ -185,7 +201,11 @@ class IV_sw:
     def stop_requested(self):
         return getattr(self, "_stop_requested", None) is not None and self._stop_requested.is_set()
     
+    @measurement_session
     def measure_Vsweep(self, row=0, col=0, target_label=None):
+        if self.stop_requested():
+            return
+        self._ensure_instruments()
         v0, v1, dv = self.v0, self.v1, self.dv
         return_swp = self.return_swp
         rt_plot    = self.rt_plot
@@ -208,6 +228,7 @@ class IV_sw:
     def measure_coord(self, coords, verbose=1):
         self.measure_channel(rowcol2nch(coords), verbose=verbose)
 
+    @measurement_session
     def measure_channel(
         self,
         channels,
@@ -280,6 +301,7 @@ class IV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to turn off all switches: {exc}")
 
+    @measurement_session
     def measure_rows(
         self,
         rows=None,
@@ -345,6 +367,7 @@ class IV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to turn off all switches: {exc}")
 
+    @measurement_session
     def measure_col(
         self,
         cols=None,

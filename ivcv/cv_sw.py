@@ -8,6 +8,7 @@ from .config import resolve_switching_matrix_uri
 from ..swmat import SWmat
 from ..inst import WayneKerr4300, Keithley6487
 from ..inst.backend import InstrumentBackend
+from .instrument_session import measurement_session
 from ..util.util import col_label, row_label, rowcol2nch
 
 
@@ -56,8 +57,14 @@ class CV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to turn off all switches: {exc}")
             finally:
-                swm.close()
+                try:
+                    swm.close()
+                except Exception as exc:
+                    print(f"WARNING: failed to close switching matrix: {exc}")
 
+        self._close_instruments()
+
+    def _close_instruments(self):
         for name in ("pau", "lcr"):
             instrument = getattr(self, name, None)
             if instrument is None:
@@ -67,6 +74,11 @@ class CV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to close {name.upper()}: {exc}")
 
+        self._instruments_open = False
+        measurement = getattr(self, "cv", None)
+        if measurement is not None:
+            measurement.lcr = None
+            measurement.pau = None
         backend = getattr(self, "_instrument_backend", None)
         self._instrument_backend = None
         if backend is not None:
@@ -74,6 +86,22 @@ class CV_sw:
                 backend.close()
             except Exception as exc:
                 print(f"WARNING: failed to close instrument backend: {exc}")
+
+    def _ensure_instruments(self):
+        if getattr(self, "_instruments_open", False):
+            return
+        resource = getattr(self, "lcr_rsrc", None)
+        if not resource:
+            raise RuntimeError("No LCR resource configured")
+        backend = self._get_instrument_backend()
+        try:
+            self.lcr.open(resource, backend=backend)
+            if self.pau is not None and getattr(self, "pau_rsrc", None):
+                self.pau.open(self.pau_rsrc, backend=backend)
+            self._instruments_open = True
+        except BaseException:
+            self._close_instruments()
+            raise
 
     def __enter__(self):
         return self
@@ -91,11 +119,6 @@ class CV_sw:
             lcr_rsrc = self.lcr.find_inst()
 
         self.lcr_rsrc = lcr_rsrc
-        if lcr_rsrc is not None:
-            self.lcr.open(
-                lcr_rsrc,
-                backend=self._get_instrument_backend(),
-            )
 
     def set_pau(self, pau_rsrc=None):
         if self.dryrun:
@@ -110,10 +133,8 @@ class CV_sw:
         self.pau_rsrc = pau_rsrc
         if pau_rsrc is not None:
             self.pau = Keithley6487()
-            self.pau.open(
-                pau_rsrc,
-                backend=self._get_instrument_backend(),
-            )
+        else:
+            self.pau = None
 
     def set_sensor_name(self, sname):
         self.sname = sname
@@ -162,6 +183,7 @@ class CV_sw:
         event = getattr(self, "_stop_requested", None)
         return event is not None and event.is_set()
 
+    @measurement_session
     def measure(self, row=0, col=0, target_label=None):
         v0, v1, dv = self.v0, self.v1, self.dv
         return_swp = self.return_swp
@@ -177,6 +199,9 @@ class CV_sw:
             print(f"   dry run CV: row={row}, col={col}")
             return
 
+        if self.stop_requested():
+            return
+        self._ensure_instruments()
         cv.initialize_measurement(self.lcr, self.pau, self.sname)
         cv.set_measurement_options(
             v0, v1, dv,
@@ -190,6 +215,7 @@ class CV_sw:
     def measure_coord(self, coords, verbose=1):
         self.measure_channel(rowcol2nch(coords), verbose=verbose)
 
+    @measurement_session
     def measure_channel(
         self,
         channels,
@@ -244,6 +270,7 @@ class CV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to turn off all switches: {exc}")
 
+    @measurement_session
     def measure_rows(
         self,
         rows=None,
@@ -290,6 +317,7 @@ class CV_sw:
             except Exception as exc:
                 print(f"WARNING: failed to turn off all switches: {exc}")
 
+    @measurement_session
     def measure_col(
         self,
         cols=None,

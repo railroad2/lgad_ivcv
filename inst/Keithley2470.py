@@ -13,6 +13,7 @@ class Keithley2470(InstBase):
     _MAX_SOURCE_VOLTAGE = 1100
 
     def __init__(self, rname=None, read_termination=None, verify_msg=None):
+        self._last_set_voltage = None
         if read_termination is not None:
             self._read_termination = read_termination
         if verify_msg is not None:
@@ -20,6 +21,14 @@ class Keithley2470(InstBase):
 
         if rname is not None:
             self.open(rname, read_termination=self._read_termination)
+
+    def open(self, *args, **kwargs):
+        self._last_set_voltage = None
+        return super().open(*args, **kwargs)
+
+    def reset(self):
+        self._last_set_voltage = None
+        return super().reset()
 
     def _ensure_scpi_mode(self):
         command_set = self.query("*LANG?").strip().upper()
@@ -88,7 +97,11 @@ class Keithley2470(InstBase):
         self.set_voltage_ramp(voltage)
 
     def set_voltage(self, voltage):
+        # A failed write may still have reached the instrument. Do not retain
+        # an old starting voltage when the resulting source level is unknown.
+        self._last_set_voltage = None
         self.write(f":SOUR:VOLT {voltage}")
+        self._last_set_voltage = float(voltage)
         self.sleep()
 
     def set_output(self, onoff):
@@ -105,7 +118,11 @@ class Keithley2470(InstBase):
         if not np.isfinite(step) or step <= 0:
             raise ValueError("step must be greater than zero")
 
-        start_voltage = self.get_voltage()
+        # During a controlled sweep the last acknowledged source setting is
+        # already known. Avoid a new query immediately before ramp-down.
+        start_voltage = self._last_set_voltage
+        if start_voltage is None:
+            start_voltage = self.get_voltage()
         delta = target_voltage - start_voltage
         if delta == 0:
             self.set_voltage(target_voltage)

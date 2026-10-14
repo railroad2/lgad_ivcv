@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 from lgad_ivcv.inst.Keithley2470 import Keithley2470
 from lgad_ivcv.inst.instbase import InstError
@@ -68,6 +69,37 @@ class Keithley2470Tests(unittest.TestCase):
             driver._inst.writes,
             [":SOUR:VOLT -1.0", ":SOUR:VOLT -2.0", ":SOUR:VOLT -3"],
         )
+
+    def test_ramp_down_uses_last_successful_setting_without_query(self):
+        driver = self.make_driver()
+        driver.set_voltage(-3)
+        with patch.object(driver._inst, "query", side_effect=TimeoutError("query timeout")) as query:
+            driver.set_voltage_ramp(0)
+        query.assert_not_called()
+        self.assertEqual(driver._inst.writes, [
+            ":SOUR:VOLT -3", ":SOUR:VOLT -2.0", ":SOUR:VOLT -1.0", ":SOUR:VOLT 0",
+        ])
+
+    def test_failed_voltage_write_invalidates_cached_setting(self):
+        driver = self.make_driver({":SOUR:VOLT?": "-5"})
+        driver.set_voltage(-3)
+        with patch.object(driver._inst, "write", side_effect=OSError(110, "timeout")):
+            with self.assertRaises(OSError):
+                driver.set_voltage(-5)
+        self.assertIsNone(driver._last_set_voltage)
+        driver.set_voltage_ramp(0)
+        self.assertEqual(driver._inst.queries, [":SOUR:VOLT?"])
+        self.assertIn(":SOUR:VOLT -4.0", driver._inst.writes)
+
+    def test_reset_and_reopen_invalidate_cached_setting(self):
+        driver = self.make_driver()
+        driver.set_voltage(-3)
+        driver.reset()
+        self.assertIsNone(driver._last_set_voltage)
+        driver.set_voltage(-3)
+        with patch("lgad_ivcv.inst.instbase.InstBase.open"):
+            driver.open("GPIB0::18::INSTR")
+        self.assertIsNone(driver._last_set_voltage)
 
     def test_sweep_selects_smallest_suitable_voltage_range(self):
         driver = self.make_driver()

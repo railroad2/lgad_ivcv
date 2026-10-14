@@ -3,6 +3,7 @@ from unittest.mock import Mock
 
 from lgad_ivcv.inst.backend import (
     InstrumentBackend,
+    InstrumentBackendError,
     NIGPIBResource,
     parse_gpib_resource,
 )
@@ -78,6 +79,23 @@ class InstrumentBackendTests(unittest.TestCase):
         )
         self.assertEqual(controller.close_count, 1)
         visa_factory.assert_not_called()
+
+    def test_transport_errors_include_address_command_and_original_cause(self):
+        controller = Mock()
+        resource = NIGPIBResource(controller, 18)
+        for operation, command, errno in (
+            ("query", ":SOUR:VOLT?", 110),
+            ("write", ":SOUR:VOLT 0", 75),
+        ):
+            with self.subTest(operation=operation):
+                error = OSError(errno, "transport failure")
+                getattr(controller, operation).side_effect = error
+                with self.assertRaises(InstrumentBackendError) as caught:
+                    getattr(resource, operation)(command)
+                self.assertIn("GPIB0::18::INSTR", str(caught.exception))
+                self.assertIn(command, str(caught.exception))
+                self.assertIn(operation, str(caught.exception))
+                self.assertIs(caught.exception.__cause__, error)
 
     def test_gpib_timeout_is_passed_to_ni_controller(self):
         controller = FakeGPIBController()

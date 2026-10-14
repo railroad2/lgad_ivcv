@@ -59,11 +59,19 @@ class NIGPIBResource:
         self.write_termination = write_termination
         self.timeout = None
 
+    def _execute(self, operation, command):
+        try:
+            return getattr(self.controller, operation)(self.address, command)
+        except Exception as exc:
+            raise InstrumentBackendError(
+                f"GPIB0::{self.address}::INSTR {operation} {command!r} failed: {exc}"
+            ) from exc
+
     def write(self, command):
-        return self.controller.write(self.address, command)
+        return self._execute("write", command)
 
     def query(self, command):
-        return self.controller.query(self.address, command)
+        return self._execute("query", command)
 
     def close(self):
         # InstrumentBackend owns the shared USB controller.

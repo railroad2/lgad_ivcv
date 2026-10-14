@@ -41,6 +41,7 @@ from .cv_worker import CVRunConfig, CVWorker
 from .instrument_finder import InstrumentFinder
 from .iv_worker import IVRunConfig, IVWorker
 from .matrix_monitor import MatrixConnectionMonitor
+from .matrix_reset import MatrixResetWorker
 
 
 class MainWindow(QMainWindow):
@@ -70,6 +71,8 @@ class MainWindow(QMainWindow):
         self._cv_log_file_path = None
         self._channel_window_shown = False
         self._matrix_monitors = []
+        self._matrix_reset = None
+        self._matrix_reset_mode = None
         self._instrument_search = None
 
         self._build_ui()
@@ -169,6 +172,12 @@ class MainWindow(QMainWindow):
         self.cv_matrix_status_label = self._matrix_status_label()
         switching_matrix_form.addRow("WebSocket address", self.cv_port_edit)
         switching_matrix_form.addRow("Status", self.cv_matrix_status_label)
+        self.cv_matrix_reset_button = QPushButton("Reset")
+        self.cv_matrix_reset_button.setToolTip("Reset the Pico through the WebSocket gateway")
+        self.cv_matrix_reset_button.clicked.connect(
+            lambda: self._reset_matrix("cv")
+        )
+        switching_matrix_form.addRow(self.cv_matrix_reset_button)
 
         instruments = QGroupBox("Instruments")
         instruments_form = QFormLayout(instruments)
@@ -342,6 +351,12 @@ class MainWindow(QMainWindow):
         self.matrix_status_label = self._matrix_status_label()
         switching_matrix_form.addRow("WebSocket address", self.port_edit)
         switching_matrix_form.addRow("Status", self.matrix_status_label)
+        self.matrix_reset_button = QPushButton("Reset")
+        self.matrix_reset_button.setToolTip("Reset the Pico through the WebSocket gateway")
+        self.matrix_reset_button.clicked.connect(
+            lambda: self._reset_matrix("iv")
+        )
+        switching_matrix_form.addRow(self.matrix_reset_button)
 
         instruments = QGroupBox("Instruments")
         instruments_form = QFormLayout(instruments)
@@ -457,6 +472,41 @@ class MainWindow(QMainWindow):
 
     def _set_cv_matrix_status(self, status):
         self._set_matrix_status(self.cv_matrix_status_label, status)
+
+    def _reset_matrix(self, mode):
+        if self._worker is not None or self._matrix_reset is not None:
+            return
+        edit = self.cv_port_edit if mode == "cv" else self.port_edit
+        uri = edit.text().strip()
+        self._matrix_reset_mode = mode
+        worker = MatrixResetWorker(uri, self)
+        self._matrix_reset = worker
+        worker.succeeded.connect(self._matrix_reset_succeeded)
+        worker.failed.connect(self._matrix_reset_failed)
+        worker.finished.connect(self._matrix_reset_finished)
+        self._set_running(True)
+        logger = self._append_cv_log if mode == "cv" else self._append_log
+        logger(f"Resetting switching matrix: {uri}")
+        self.statusBar().showMessage("Resetting switching matrix...")
+        worker.start()
+
+    def _matrix_reset_succeeded(self):
+        logger = self._append_cv_log if self._matrix_reset_mode == "cv" else self._append_log
+        logger("RESET SUCCESS: Pico restart verified.")
+        self.statusBar().showMessage("Switching matrix reset succeeded.")
+
+    def _matrix_reset_failed(self, message):
+        logger = self._append_cv_log if self._matrix_reset_mode == "cv" else self._append_log
+        logger(f"RESET FAILED: {message}")
+        self.statusBar().showMessage(f"Switching matrix reset failed: {message}")
+
+    def _matrix_reset_finished(self):
+        worker = self._matrix_reset
+        self._matrix_reset = None
+        self._matrix_reset_mode = None
+        if worker is not None:
+            worker.deleteLater()
+        self._set_running(False)
 
     def _start_matrix_monitors(self):
         specifications = (
@@ -614,7 +664,7 @@ class MainWindow(QMainWindow):
         self._instrument_search = None
         if search is not None:
             search.deleteLater()
-        if self._worker is None:
+        if self._worker is None and self._matrix_reset is None:
             self.start_button.setEnabled(True)
             self.cv_start_button.setEnabled(True)
             for button in self._instrument_find_buttons():
@@ -928,7 +978,7 @@ class MainWindow(QMainWindow):
         )
 
     def _start_measurement(self):
-        if self._worker is not None:
+        if self._worker is not None or self._matrix_reset is not None:
             return
         try:
             config = self._make_config()
@@ -982,7 +1032,7 @@ class MainWindow(QMainWindow):
         thread.start()
 
     def _start_cv_measurement(self):
-        if self._worker is not None:
+        if self._worker is not None or self._matrix_reset is not None:
             return
         try:
             config = self._make_cv_config()
@@ -1395,6 +1445,8 @@ class MainWindow(QMainWindow):
         self.cv_stop_button.setEnabled(running and active_measurement == "cv")
         self.measurement_tabs.tabBar().setEnabled(not running)
         for widget in (
+            self.matrix_reset_button,
+            self.cv_matrix_reset_button,
             self.port_edit,
             self.smu_edit,
             self.pau_enable_check,
@@ -1604,6 +1656,10 @@ class MainWindow(QMainWindow):
             self._show_channel_window()
 
     def closeEvent(self, event: QCloseEvent):
+        if self._matrix_reset is not None:
+            self.statusBar().showMessage("Wait for the switching matrix reset to finish before closing.")
+            event.ignore()
+            return
         if self._instrument_search is not None:
             QMessageBox.information(
                 self,

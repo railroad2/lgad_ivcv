@@ -435,6 +435,35 @@ class MainWindowTests(unittest.TestCase):
         cls.app.setApplicationName("LGAD main window tests")
         QSettings().clear()
 
+    def test_matrix_reset_uses_tab_address_and_blocks_measurement(self):
+        with patch.object(MainWindow, "_start_matrix_monitors"), patch(
+            "lgad_ivcv.gui.main_window.MatrixResetWorker"
+        ) as factory:
+            window = MainWindow()
+            try:
+                for mode, button, edit in (
+                    ("iv", window.matrix_reset_button, window.port_edit),
+                    ("cv", window.cv_matrix_reset_button, window.cv_port_edit),
+                ):
+                    edit.setText(f"ws://{mode}-matrix:8765")
+                    button.click()
+                    factory.assert_called_with(f"ws://{mode}-matrix:8765", window)
+                    self.assertFalse(window.start_button.isEnabled())
+                    self.assertFalse(window.cv_start_button.isEnabled())
+                    self.assertFalse(window.matrix_reset_button.isEnabled())
+                    self.assertFalse(window.cv_matrix_reset_button.isEnabled())
+                    with patch.object(window, "_make_config") as make_config:
+                        window._start_measurement()
+                        make_config.assert_not_called()
+                    window._matrix_reset_finished()
+                    self.assertTrue(window.start_button.isEnabled())
+                    self.assertTrue(button.isEnabled())
+                window._set_running(True, "iv")
+                self.assertFalse(window.matrix_reset_button.isEnabled())
+                self.assertFalse(window.cv_matrix_reset_button.isEnabled())
+            finally:
+                window.close()
+
     def test_channel_and_plot_are_independent_windows(self):
         window = MainWindow()
 

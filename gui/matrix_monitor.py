@@ -34,9 +34,10 @@ def monitor_uri_from_control_uri(control_uri, monitor_port=8766):
 
 
 class MatrixConnectionMonitor(QObject):
-    """Continuously check the gateway monitor endpoint outside the GUI thread."""
+    """Continuously check the gateway and its UART-connected Pico."""
 
     status_changed = Signal(str, str)
+    pico_status_changed = Signal(str, str)
     finished = Signal()
 
     def __init__(
@@ -57,6 +58,7 @@ class MatrixConnectionMonitor(QObject):
         self._address_changed = threading.Event()
         self._address_lock = threading.Lock()
         self._last_status = None
+        self._last_pico_status = None
         self._thread = None
 
     def start(self):
@@ -95,6 +97,17 @@ class MatrixConnectionMonitor(QObject):
             self._last_status = current
             self.status_changed.emit(control_uri, status)
 
+    def _emit_pico_status(self, control_uri, status):
+        current = (control_uri, status)
+        if current != self._last_pico_status:
+            self._last_pico_status = current
+            self.pico_status_changed.emit(control_uri, status)
+
+    @staticmethod
+    def _close_client(client):
+        if client is not None:
+            client.close()
+
     def _wait(self, timeout):
         changed = self._address_changed.wait(timeout)
         self._address_changed.clear()
@@ -106,30 +119,50 @@ class MatrixConnectionMonitor(QObject):
             while not self._stop_event.is_set():
                 control_uri = self._current_control_uri()
                 self._emit_status(control_uri, "Checking...")
-                client = None
+                self._emit_pico_status(control_uri, "Checking...")
+                monitor_client = None
+                pico_client = None
                 try:
                     monitor_uri = monitor_uri_from_control_uri(control_uri)
-                    client = WebSocketClientSync(
+                    monitor_client = WebSocketClientSync(
                         monitor_uri,
                         timeout=self._timeout,
                         connect_timeout=self._timeout,
                     )
-                    client.connect()
+                    monitor_client.connect()
                     if self._stop_event.is_set():
                         break
-                    client.gateway_ping()
+                    monitor_client.gateway_ping()
                     if self._address_changed.is_set():
                         continue
                     self._emit_status(control_uri, "Connected")
 
-                    while not self._wait(self._check_interval):
-                        client.gateway_ping()
+                    while not self._stop_event.is_set():
+                        try:
+                            if pico_client is None:
+                                pico_client = WebSocketClientSync(
+                                    control_uri,
+                                    timeout=self._timeout,
+                                    connect_timeout=self._timeout,
+                                )
+                                pico_client.connect()
+                            pico_client.ping()
+                            self._emit_pico_status(control_uri, "Connected")
+                        except Exception:
+                            self._close_client(pico_client)
+                            pico_client = None
+                            self._emit_pico_status(control_uri, "Disconnected")
+
+                        if self._wait(self._check_interval):
+                            break
+                        monitor_client.gateway_ping()
                 except Exception:
                     if not self._stop_event.is_set():
                         self._emit_status(control_uri, "Disconnected")
+                        self._emit_pico_status(control_uri, "Unavailable")
                         self._wait(self._retry_interval)
                 finally:
-                    if client is not None:
-                        client.close()
+                    self._close_client(pico_client)
+                    self._close_client(monitor_client)
         finally:
             self.finished.emit()

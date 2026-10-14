@@ -167,8 +167,10 @@ class MainWindow(QMainWindow):
         switching_matrix_form = QFormLayout(switching_matrix)
         self.cv_port_edit = QLineEdit(resolve_switching_matrix_uri())
         self.cv_matrix_status_label = self._matrix_status_label()
+        self.cv_matrix_pico_status_label = self._matrix_status_label()
         switching_matrix_form.addRow("WebSocket address", self.cv_port_edit)
-        switching_matrix_form.addRow("Status", self.cv_matrix_status_label)
+        switching_matrix_form.addRow("Gateway", self.cv_matrix_status_label)
+        switching_matrix_form.addRow("Pico (UART)", self.cv_matrix_pico_status_label)
 
         instruments = QGroupBox("Instruments")
         instruments_form = QFormLayout(instruments)
@@ -340,8 +342,10 @@ class MainWindow(QMainWindow):
         switching_matrix_form = QFormLayout(switching_matrix)
         self.port_edit = QLineEdit(resolve_switching_matrix_uri())
         self.matrix_status_label = self._matrix_status_label()
+        self.matrix_pico_status_label = self._matrix_status_label()
         switching_matrix_form.addRow("WebSocket address", self.port_edit)
-        switching_matrix_form.addRow("Status", self.matrix_status_label)
+        switching_matrix_form.addRow("Gateway", self.matrix_status_label)
+        switching_matrix_form.addRow("Pico (UART)", self.matrix_pico_status_label)
 
         instruments = QGroupBox("Instruments")
         instruments_form = QFormLayout(instruments)
@@ -446,6 +450,7 @@ class MainWindow(QMainWindow):
             "Connected": "#18763a",
             "Checking...": "#9a6700",
             "Disconnected": "#666666",
+            "Unavailable": "#666666",
         }
         label.setText(status)
         label.setStyleSheet(
@@ -458,14 +463,32 @@ class MainWindow(QMainWindow):
     def _set_cv_matrix_status(self, status):
         self._set_matrix_status(self.cv_matrix_status_label, status)
 
+    def _set_iv_matrix_pico_status(self, status):
+        self._set_matrix_status(self.matrix_pico_status_label, status)
+
+    def _set_cv_matrix_pico_status(self, status):
+        self._set_matrix_status(self.cv_matrix_pico_status_label, status)
+
     def _start_matrix_monitors(self):
         specifications = (
-            (self.port_edit, self._set_iv_monitored_status),
-            (self.cv_port_edit, self._set_cv_monitored_status),
+            (
+                self.port_edit,
+                self._set_iv_monitored_status,
+                self._set_iv_monitored_pico_status,
+            ),
+            (
+                self.cv_port_edit,
+                self._set_cv_monitored_status,
+                self._set_cv_monitored_pico_status,
+            ),
         )
-        for address_edit, status_slot in specifications:
+        for address_edit, status_slot, pico_status_slot in specifications:
             monitor = MatrixConnectionMonitor(address_edit.text())
             monitor.status_changed.connect(status_slot, Qt.QueuedConnection)
+            monitor.pico_status_changed.connect(
+                pico_status_slot,
+                Qt.QueuedConnection,
+            )
             self._matrix_monitors.append(monitor)
             monitor.start()
 
@@ -477,13 +500,23 @@ class MainWindow(QMainWindow):
         if address.strip() == self.cv_port_edit.text().strip():
             self._set_cv_matrix_status(status)
 
+    def _set_iv_monitored_pico_status(self, address, status):
+        if address.strip() == self.port_edit.text().strip():
+            self._set_iv_matrix_pico_status(status)
+
+    def _set_cv_monitored_pico_status(self, address, status):
+        if address.strip() == self.cv_port_edit.text().strip():
+            self._set_cv_matrix_pico_status(status)
+
     def _iv_matrix_address_changed(self, address):
         self._set_iv_matrix_status("Checking...")
+        self._set_iv_matrix_pico_status("Checking...")
         if self._matrix_monitors:
             self._matrix_monitors[0].set_control_uri(address)
 
     def _cv_matrix_address_changed(self, address):
         self._set_cv_matrix_status("Checking...")
+        self._set_cv_matrix_pico_status("Checking...")
         if len(self._matrix_monitors) > 1:
             self._matrix_monitors[1].set_control_uri(address)
 

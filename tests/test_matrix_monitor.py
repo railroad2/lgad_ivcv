@@ -36,8 +36,12 @@ class MatrixMonitorUriTests(unittest.TestCase):
             check_interval=0.001,
         )
         statuses = []
+        pico_statuses = []
         monitor.status_changed.connect(
             lambda address, status: statuses.append((address, status))
+        )
+        monitor.pico_status_changed.connect(
+            lambda address, status: pico_statuses.append((address, status))
         )
 
         class FakeClient:
@@ -50,8 +54,9 @@ class MatrixMonitorUriTests(unittest.TestCase):
 
             def gateway_ping(self):
                 self.ping_count += 1
-                if self.ping_count == 2:
-                    monitor.request_stop()
+
+            def ping(self):
+                monitor.request_stop()
 
             def close(self):
                 return None
@@ -69,6 +74,50 @@ class MatrixMonitorUriTests(unittest.TestCase):
                 ("ws://swm:8765", "Connected"),
             ],
         )
+        self.assertEqual(
+            pico_statuses,
+            [
+                ("ws://swm:8765", "Checking..."),
+                ("ws://swm:8765", "Connected"),
+            ],
+        )
+
+    def test_monitor_distinguishes_gateway_from_disconnected_pico(self):
+        monitor = MatrixConnectionMonitor("ws://swm:8765")
+        gateway_statuses = []
+        pico_statuses = []
+        monitor.status_changed.connect(
+            lambda _address, status: gateway_statuses.append(status)
+        )
+        monitor.pico_status_changed.connect(
+            lambda _address, status: pico_statuses.append(status)
+        )
+
+        class FakeClient:
+            def __init__(self, uri, **kwargs):
+                self.uri = uri
+
+            def connect(self):
+                return None
+
+            def gateway_ping(self):
+                return None
+
+            def ping(self):
+                monitor.request_stop()
+                raise RuntimeError("Pico did not respond")
+
+            def close(self):
+                return None
+
+        with patch(
+            "lgad_ivcv.gui.matrix_monitor.WebSocketClientSync",
+            FakeClient,
+        ):
+            monitor.run()
+
+        self.assertEqual(gateway_statuses, ["Checking...", "Connected"])
+        self.assertEqual(pico_statuses, ["Checking...", "Disconnected"])
 
 
 if __name__ == "__main__":

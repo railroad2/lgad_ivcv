@@ -726,11 +726,22 @@ class MainWindowTests(unittest.TestCase):
             window.cv_matrix_status_label.text(),
             ("Checking...", "Disconnected"),
         )
+        self.assertIn(
+            window.matrix_pico_status_label.text(),
+            ("Checking...", "Disconnected", "Unavailable"),
+        )
+        self.assertIn(
+            window.cv_matrix_pico_status_label.text(),
+            ("Checking...", "Disconnected", "Unavailable"),
+        )
 
         window._set_iv_matrix_status("Connected")
         self.assertEqual(window.matrix_status_label.text(), "Connected")
+        window._set_iv_matrix_pico_status("Connected")
+        self.assertEqual(window.matrix_pico_status_label.text(), "Connected")
         window.port_edit.setText("ws://another-matrix:8765")
         self.assertEqual(window.matrix_status_label.text(), "Checking...")
+        self.assertEqual(window.matrix_pico_status_label.text(), "Checking...")
 
         window.close()
 

@@ -10,6 +10,11 @@ Install the dependencies from the repository directory:
 python3 -m pip install -r requirements.txt
 ```
 
+GPIB instruments use the NI GPIB-USB-HS userspace driver directly. Install
+the separately distributed `ni_gpib_usb_hs` module in the same Python
+environment before connecting GPIB instruments. PyVISA remains the backend
+for serial resources such as `ASRL/dev/ttyUSB0::INSTR`.
+
 The `swm_ctrl` package must be importable for WebSocket switching-matrix
 control. If `lgad_ivcv` and `swm_ctrl` are sibling repositories, add their
 common parent directory to `PYTHONPATH`:
@@ -89,28 +94,32 @@ python3 scripts/iv_once.py --sensorname sensor01
 python3 scripts/cv_once.py --sensorname sensor01
 ```
 
-To sweep and measure with only the Keithley 2400 SMU (without the switching
-matrix or picoammeter), use `smu_sweep.py`:
+To sweep and measure with only a Keithley 2400, 2410, or 2470 SMU (without the
+switching matrix or picoammeter), use `smu_sweep.py`:
 
 ```bash
 python3 scripts/smu_sweep.py \
     --sensorname sensor01 --Vstart 0 --Vend -100 --Vstep 1 \
-    --Icompliance 1e-5 --smu 'ASRL/dev/ttyUSB0::INSTR' \
+    --Icompliance 1e-5 --smu 'GPIB0::24::INSTR' \
     --postfix dark
 ```
 
-When `--smu` is omitted, the script searches for the Keithley 2400. Results
-contain the requested voltage, measured SMU voltage, and measured SMU current.
-Before measurement, the SMU ramps from 0 V to `--Vstart` in fixed 1 V
-increments, independently of `--Vstep`. The script also saves a PNG plot of
-`Ismu` versus `Vsmu`; the plot includes a linear fit, its `dI/dV` slope, and
-the reciprocal `dV/dI` value.
+When `--smu` is omitted, the script searches for a supported SMU. Supplying a
+resource connects only to that address. Results contain the requested voltage,
+measured SMU voltage, and measured SMU current. Before enabling the output, the
+script validates the requested voltages against the connected model's limit and
+selects a suitable source range. The SMU then ramps from 0 V to `--Vstart` in
+fixed 1 V increments, independently of `--Vstep`. The script also saves a PNG
+plot of `Ismu` versus `Vsmu`; the plot includes a linear fit, its `dI/dV` slope,
+and the reciprocal `dV/dI` value.
 The optional `--postfix` value is appended to both output filenames before
 the `.txt` and `.png` extensions.
 
 ### Measuring instruments
 
-The measurement programs use PyVISA resource names to open the instruments:
+The measurement programs use VISA-style resource names. `GPIB0` resources are
+opened through `ni_gpib_usb_hs.NIUSBGPIB`; other resources are opened through
+PyVISA:
 
 | Measurement | Option | Instrument | VISA resource name |
 | --- | --- | --- | --- |
@@ -119,7 +128,7 @@ The measurement programs use PyVISA resource names to open the instruments:
 | CV | `--lcr` | Wayne Kerr 4300 LCR meter | Searched automatically when omitted |
 | CV | `--pau` | (Optional) Keithley 6487 picoammeter/bias source | Not searched automatically |
 
-List the VISA resources visible to Python with:
+List the non-GPIB VISA resources visible to Python with:
 
 ```bash
 python3 - <<'PY'
@@ -144,12 +153,36 @@ python3 scripts/cv_selected.py 0 17 255 \
     --pau 'ASRL/dev/ttyUSB1::INSTR'
 ```
 
-Automatic detection examines serial VISA resources whose names contain
-`ttyUSB` and GPIB VISA resources whose names start with `GPIB`, queries each
-device with `*IDN?`, and selects the resource whose identification matches the
-expected instrument model. Keithley 2400 and 2410 instruments use the
-`Keithley2400` driver; the 2470 uses its dedicated driver. Resources using
-another transport or device name must be supplied explicitly.
+Run `check_gpib.py` without an address to initialize only the USB adapter.
+This does not address or query any instrument:
+
+```bash
+python3 scripts/check_gpib.py
+```
+
+To check one known GPIB primary address without scanning the bus, pass either
+the address number or its complete resource name:
+
+```bash
+python3 scripts/check_gpib.py 24
+python3 scripts/check_gpib.py 'GPIB0::24::INSTR'
+python3 scripts/check_gpib.py 24 --timeout 0.3
+```
+
+The command prints the normalized resource name and its `*IDN?` reply. Its
+default GPIB timeout is 1 second; use `--timeout` to shorten or extend it.
+
+Automatic detection examines serial PyVISA resources whose names contain
+`ttyUSB` and scans NI GPIB-USB-HS primary addresses 1 through 30. It queries
+each candidate with `*IDN?` and selects the resource whose identification
+matches the expected instrument model. Keithley 2400 and 2410 instruments use
+the `Keithley2400` driver; the 2470 uses its dedicated driver. Resources using
+another connection type or device name must be supplied explicitly.
+
+Before enabling the SMU output, IV measurement validates the complete sweep
+against the detected model and selects the smallest suitable voltage range.
+The 2400 is limited to 200 V. The 2410 and 2470 use a 1000 V nominal range and
+accept sweep magnitudes up to 1100 V.
 
 IV measurement requires the SMU for voltage bias and can also use the
 picoammeter for an additional current reading. CV measurement requires the LCR

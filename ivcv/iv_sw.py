@@ -2,48 +2,19 @@ import time
 import threading
 from numbers import Integral
 
-import pyvisa
-
 from .IVMeasurement import IVMeasurement
 from .config import resolve_switching_matrix_uri
 
 from ..swmat import SWmat
-from ..inst import Keithley2400, Keithley2470, Keithley6487
-from ..inst.instbase import InstError
+from ..inst import Keithley2400, Keithley6487
+from ..inst.backend import InstrumentBackend
+from ..inst.smu import SMU_DRIVERS, open_smu
 from ..util.util import (
     channel_label, col_label, row_label, rowcol2nch, target_text,
 )
 
 
 _DEFAULT_PORT = object()
-_SMU_DRIVERS = (Keithley2400, Keithley2470)
-
-
-def _smu_driver_for_identity(identity):
-    identity = identity.upper()
-    if "MODEL 2470" in identity:
-        return Keithley2470
-    if "MODEL 2400" in identity or "MODEL 2410" in identity:
-        return Keithley2400
-    raise ValueError(f"Unsupported SMU: {identity.strip()}")
-
-
-def _query_visa_identity(resource_name):
-    """Read one resource identity before choosing its model-specific driver."""
-    manager = pyvisa.ResourceManager()
-    resource = None
-    try:
-        options = {}
-        if "ttyUSB" in resource_name:
-            options["read_termination"] = "\r"
-        resource = manager.open_resource(resource_name, **options)
-        return resource.query("*IDN?").strip()
-    finally:
-        if resource is not None:
-            resource.close()
-        manager.close()
-
-
 class IV_sw:
 
     def __init__(self, port=_DEFAULT_PORT, dryrun=False):
@@ -64,20 +35,45 @@ class IV_sw:
         self.dryrun = dryrun
         self.iv.base_path = "./IV_test"
         self._stop_requested = threading.Event()
+        self._instrument_backend = None
+
+    def _get_instrument_backend(self):
+        backend = getattr(self, "_instrument_backend", None)
+        if backend is None:
+            backend = InstrumentBackend()
+            self._instrument_backend = backend
+        return backend
 
     def set_switching_matrix(self, port):
         self.port = port
         self.swm.open(port)
 
     def close(self):
-        if self.swm.comm is None:
-            return
-        try:
-            self.swm.off_all()
-        except Exception as exc:
-            print(f"WARNING: failed to turn off all switches: {exc}")
-        finally:
-            self.swm.close()
+        swm = getattr(self, "swm", None)
+        if swm is not None and swm.comm is not None:
+            try:
+                swm.off_all()
+            except Exception as exc:
+                print(f"WARNING: failed to turn off all switches: {exc}")
+            finally:
+                swm.close()
+
+        for name in ("pau", "smu"):
+            instrument = getattr(self, name, None)
+            if instrument is None:
+                continue
+            try:
+                instrument.close()
+            except Exception as exc:
+                print(f"WARNING: failed to close {name.upper()}: {exc}")
+
+        backend = getattr(self, "_instrument_backend", None)
+        self._instrument_backend = None
+        if backend is not None:
+            try:
+                backend.close()
+            except Exception as exc:
+                print(f"WARNING: failed to close instrument backend: {exc}")
 
     def __enter__(self):
         return self
@@ -91,25 +87,25 @@ class IV_sw:
 
         if smu_rsrc is None:
             print ('Looking for the SMU')
-            for driver_type in _SMU_DRIVERS:
+            for driver_type in SMU_DRIVERS:
                 candidate = driver_type()
                 smu_rsrc = candidate.find_inst()
                 if smu_rsrc is not None:
                     self.smu = candidate
                     break
+            if smu_rsrc is not None:
+                self.smu.open(
+                    smu_rsrc,
+                    backend=self._get_instrument_backend(),
+                )
         else:
-            try:
-                identity = _query_visa_identity(smu_rsrc)
-            except Exception as exc:
-                raise InstError(
-                    f"No *IDN? response from {smu_rsrc}: {exc}"
-                ) from exc
-            self.smu = _smu_driver_for_identity(identity)()
-            self.smu.found_idn = identity
+            self.smu = open_smu(
+                smu_rsrc,
+                backend=self._get_instrument_backend(),
+            )
 
         self.smu_rsrc = smu_rsrc
         if smu_rsrc is not None:
-            self.smu.open(smu_rsrc)
             print (f'SMU is connected: {smu_rsrc}')
 
     def set_pau(self, pau_rsrc=None):
@@ -122,7 +118,10 @@ class IV_sw:
 
         self.pau_rsrc = pau_rsrc
         if pau_rsrc is not None:
-            self.pau.open(pau_rsrc)
+            self.pau.open(
+                pau_rsrc,
+                backend=self._get_instrument_backend(),
+            )
             print (f'PAU is connected: {pau_rsrc}')
 
     def disable_pau(self):

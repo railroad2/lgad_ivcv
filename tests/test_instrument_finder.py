@@ -5,32 +5,6 @@ from lgad_ivcv.gui.instrument_finder import InstrumentFinder
 
 
 class InstrumentFinderTests(unittest.TestCase):
-    class FakeVisaResource:
-        def __init__(self, identity):
-            self.identity = identity
-            self.closed = False
-
-        def query(self, command):
-            if command != "*IDN?":
-                raise AssertionError(command)
-            return self.identity
-
-        def close(self):
-            self.closed = True
-
-    class FakeResourceManager:
-        def __init__(self, resource):
-            self.resource = resource
-            self.opened = []
-            self.closed = False
-
-        def open_resource(self, resource_name, **options):
-            self.opened.append((resource_name, options))
-            return self.resource
-
-        def close(self):
-            self.closed = True
-
     def test_found_resource_is_emitted(self):
         class FakeInstrument:
             found_idn = "KEITHLEY INSTRUMENTS INC.,MODEL 2400"
@@ -128,10 +102,6 @@ class InstrumentFinderTests(unittest.TestCase):
             def find_inst(self):
                 raise AssertionError("full search should not run")
 
-        visa_resource = self.FakeVisaResource(
-            "KEITHLEY INSTRUMENTS INC.,MODEL 2410"
-        )
-        manager = self.FakeResourceManager(visa_resource)
         finder = InstrumentFinder(
             "smu",
             preferred_resource="GPIB0::24::INSTR",
@@ -143,8 +113,8 @@ class InstrumentFinderTests(unittest.TestCase):
             "lgad_ivcv.gui.instrument_finder.INSTRUMENT_FACTORIES",
             {"smu": FakeInstrument},
         ), patch(
-            "lgad_ivcv.gui.instrument_finder.pyvisa.ResourceManager",
-            return_value=manager,
+            "lgad_ivcv.gui.instrument_finder.query_identity",
+            return_value="KEITHLEY INSTRUMENTS INC.,MODEL 2410",
         ):
             finder.run()
 
@@ -157,9 +127,6 @@ class InstrumentFinderTests(unittest.TestCase):
                 )
             ],
         )
-        self.assertTrue(visa_resource.closed)
-        self.assertTrue(manager.closed)
-
     def test_invalid_existing_resource_falls_back_to_full_search(self):
         class FakeInstrument:
             _verify_msg = "MODEL 2400"
@@ -169,8 +136,6 @@ class InstrumentFinderTests(unittest.TestCase):
             def find_inst(self):
                 return "GPIB0::25::INSTR"
 
-        visa_resource = self.FakeVisaResource("UNSUPPORTED INSTRUMENT")
-        manager = self.FakeResourceManager(visa_resource)
         finder = InstrumentFinder(
             "smu",
             preferred_resource="GPIB0::99::INSTR",
@@ -182,8 +147,8 @@ class InstrumentFinderTests(unittest.TestCase):
             "lgad_ivcv.gui.instrument_finder.INSTRUMENT_FACTORIES",
             {"smu": FakeInstrument},
         ), patch(
-            "lgad_ivcv.gui.instrument_finder.pyvisa.ResourceManager",
-            return_value=manager,
+            "lgad_ivcv.gui.instrument_finder.query_identity",
+            return_value="UNSUPPORTED INSTRUMENT",
         ):
             finder.run()
 

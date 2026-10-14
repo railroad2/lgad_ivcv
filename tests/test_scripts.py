@@ -1,10 +1,15 @@
+import argparse
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 
 from scripts import (
+    check_gpib,
     cv_all,
     cv_once,
     cv_selected,
@@ -187,6 +192,96 @@ class ScriptLifecycleTests(unittest.TestCase):
         runner.swm.assert_not_called()
         runner.__exit__.assert_called_once()
 
+    def test_gpib_check_accepts_numeric_and_resource_addresses(self):
+        self.assertEqual(check_gpib.gpib_resource("24"), "GPIB0::24::INSTR")
+        self.assertEqual(
+            check_gpib.gpib_resource("gpib0::6::instr"),
+            "GPIB0::6::INSTR",
+        )
+
+    def test_gpib_check_rejects_invalid_addresses(self):
+        for address in ("0", "31", "GPIB1::6::INSTR", "ASRL1::INSTR"):
+            with self.subTest(address=address):
+                with self.assertRaises(argparse.ArgumentTypeError):
+                    check_gpib.gpib_resource(address)
+
+    def test_gpib_check_without_address_initializes_adapter_only(self):
+        output = StringIO()
+        with patch.object(
+            check_gpib,
+            "check_gpib_adapter",
+            return_value="01234567",
+        ) as check_adapter, patch.object(
+            check_gpib,
+            "query_gpib_identity",
+        ) as identify, redirect_stdout(output):
+            result = check_gpib.main([])
+
+        self.assertEqual(result, 0)
+        check_adapter.assert_called_once_with(1.0)
+        identify.assert_not_called()
+        self.assertEqual(
+            output.getvalue().splitlines(),
+            [
+                "NI GPIB-USB-HS: INITIALIZED",
+                "Serial: 01234567",
+                "Instrument connection: NOT CHECKED",
+            ],
+        )
+
+    def test_gpib_check_reports_adapter_failure(self):
+        errors = StringIO()
+        with patch.object(
+            check_gpib,
+            "check_gpib_adapter",
+            side_effect=RuntimeError("adapter failed the ready handshake"),
+        ), redirect_stderr(errors):
+            result = check_gpib.main([])
+
+        self.assertEqual(result, 1)
+        self.assertIn("NI GPIB-USB-HS", errors.getvalue())
+        self.assertIn("ready handshake", errors.getvalue())
+
+    def test_gpib_check_queries_only_the_requested_address(self):
+        output = StringIO()
+        with patch.object(
+            check_gpib,
+            "query_gpib_identity",
+            return_value="KEITHLEY INSTRUMENTS INC.,MODEL 2410",
+        ) as identify, redirect_stdout(output):
+            result = check_gpib.main(["24"])
+
+        self.assertEqual(result, 0)
+        identify.assert_called_once_with("GPIB0::24::INSTR", 1.0)
+        self.assertEqual(
+            output.getvalue().strip(),
+            "GPIB0::24::INSTR: KEITHLEY INSTRUMENTS INC.,MODEL 2410",
+        )
+
+    def test_gpib_check_reports_connection_failure(self):
+        errors = StringIO()
+        with patch.object(
+            check_gpib,
+            "query_gpib_identity",
+            side_effect=TimeoutError("no listener"),
+        ), redirect_stderr(errors):
+            result = check_gpib.main(["GPIB0::6::INSTR"])
+
+        self.assertEqual(result, 1)
+        self.assertIn("GPIB0::6::INSTR", errors.getvalue())
+        self.assertIn("no listener", errors.getvalue())
+
+    def test_gpib_check_accepts_shorter_timeout(self):
+        with patch.object(
+            check_gpib,
+            "query_gpib_identity",
+            return_value="KEITHLEY INSTRUMENTS INC.,MODEL 2470",
+        ) as identify, redirect_stdout(StringIO()):
+            result = check_gpib.main(["24", "--timeout", "0.3"])
+
+        self.assertEqual(result, 0)
+        identify.assert_called_once_with("GPIB0::24::INSTR", 0.3)
+
     def test_smu_sweep_generates_endpoint_in_both_directions(self):
         np.testing.assert_allclose(
             smu_sweep.make_voltage_points(0, -2.5, 1),
@@ -221,9 +316,26 @@ class ScriptLifecycleTests(unittest.TestCase):
             result,
             [[0.0, 0.0, 1e-9], [-1.0, -1.0, 2e-9]],
         )
+        configured_voltages = smu.configure_voltage_sweep.call_args.args[0]
+        np.testing.assert_allclose(configured_voltages, [0, -1])
         smu.set_current_limit.assert_called_once_with(1e-6)
         self.assertEqual(smu.measure.call_count, 2)
         smu.set_voltage_ramp.assert_called_once_with(0)
+        self.assertEqual(smu.set_output.call_args_list[-1].args, ("off",))
+
+    def test_smu_sweep_validates_model_limit_before_enabling_output(self):
+        smu = MagicMock()
+        smu.configure_voltage_sweep.side_effect = ValueError(
+            "Keithley 2400 sweep exceeds its 200 V limit"
+        )
+
+        with self.assertRaisesRegex(ValueError, "200 V limit"):
+            smu_sweep.measure_sweep(smu, 0, -201, 1, 1e-6)
+
+        self.assertNotIn(
+            unittest.mock.call("on"),
+            smu.set_output.call_args_list,
+        )
         self.assertEqual(smu.set_output.call_args_list[-1].args, ("off",))
 
     def test_smu_only_sweep_ramps_from_zero_to_start_voltage(self):
@@ -267,6 +379,57 @@ class ScriptLifecycleTests(unittest.TestCase):
             self.assertTrue(text_path.is_file())
             self.assertTrue(text_path.with_suffix(".png").is_file())
             self.assertTrue(text_path.stem.endswith("_dark_run"))
+
+    def test_smu_sweep_finds_all_supported_driver_types(self):
+        first_driver = MagicMock()
+        first_driver.find_inst.return_value = None
+        second_driver = MagicMock()
+        second_driver.find_inst.return_value = "GPIB0::24::INSTR"
+
+        with patch.object(
+            smu_sweep,
+            "SMU_DRIVERS",
+            (lambda: first_driver, lambda: second_driver),
+        ):
+            resource = smu_sweep.find_smu_resource()
+
+        self.assertEqual(resource, "GPIB0::24::INSTR")
+        first_driver.find_inst.assert_called_once_with()
+        second_driver.find_inst.assert_called_once_with()
+
+    def test_smu_sweep_uses_identity_selected_driver(self):
+        smu = MagicMock()
+        smu.found_idn = "KEITHLEY INSTRUMENTS INC.,MODEL 2470,1234,1.0"
+        output_path = Path("/tmp/result.txt")
+
+        with patch.object(smu_sweep, "open_smu", return_value=smu) as opener, \
+                patch.object(
+                    smu_sweep,
+                    "measure_sweep",
+                    return_value=np.array([[0.0, 0.0, 1e-9]]),
+                ), patch.object(
+                    smu_sweep,
+                    "save_results",
+                    return_value=output_path,
+                ) as save_results:
+            result = smu_sweep.run_sweep(
+                0,
+                -1,
+                1,
+                1e-6,
+                "/tmp",
+                "sensor",
+                resource="GPIB0::24::INSTR",
+            )
+
+        self.assertEqual(result, output_path)
+        opener.assert_called_once_with("GPIB0::24::INSTR")
+        save_results.assert_called_once()
+        self.assertEqual(
+            save_results.call_args.kwargs["instrument_name"],
+            "Keithley 2470",
+        )
+        smu.close.assert_called_once_with()
 
 
 if __name__ == "__main__":

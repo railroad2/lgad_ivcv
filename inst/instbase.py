@@ -1,5 +1,6 @@
 import time
-import pyvisa
+
+from .backend import InstrumentBackend
 
 class InstError(Exception):
     pass
@@ -11,7 +12,13 @@ class InstBase:
     _write_termination='\r'
     _verify_msg=''
 
-    def open(self, rname, read_termination=None, write_termination=None):
+    def open(
+        self,
+        rname,
+        read_termination=None,
+        write_termination=None,
+        backend=None,
+    ):
         if rname is None:
             raise Exception('An incorrect device has been assigned...')
 
@@ -20,10 +27,22 @@ class InstBase:
         if write_termination:
             self._write_termination = write_termination
         
-        rm = pyvisa.ResourceManager()
-        self._inst = rm.open_resource(rname, 
-                                      read_termination=self._read_termination)
-        self._check_identity(rname)
+        owns_backend = backend is None
+        if backend is None:
+            backend = InstrumentBackend()
+        self._owns_backend = owns_backend
+        self._backend = backend
+        try:
+            self._inst = backend.open_resource(
+                rname,
+                read_termination=self._read_termination,
+                write_termination=self._write_termination,
+            )
+            self._check_identity(rname)
+        except BaseException:
+            if getattr(self, "_backend", None) is backend:
+                self.close()
+            raise
 
     def _check_identity(self, rname):
         """Close the resource and raise unless it is the expected model."""
@@ -47,10 +66,7 @@ class InstBase:
         self.found_idn = identity
 
     def _close_unverified(self):
-        try:
-            self._inst.close()
-        finally:
-            self._inst = []
+        self.close()
 
     def verify_inst(self, msg):
         messages = (msg,) if isinstance(msg, str) else tuple(msg)
@@ -72,9 +88,9 @@ class InstBase:
             msg = self._verify_msg
         messages = (msg,) if isinstance(msg, str) else tuple(msg)
 
-        rm = pyvisa.ResourceManager()
+        backend = InstrumentBackend()
         try:
-            for rname in rm.list_resources():
+            for rname in backend.list_resources():
                 is_usb_serial = 'ttyUSB' in rname
                 is_gpib = rname.upper().startswith('GPIB')
                 if not (is_usb_serial or is_gpib):
@@ -82,14 +98,13 @@ class InstBase:
 
                 tmp = None
                 try:
-                    tmp = rm.open_resource(
+                    tmp = backend.open_resource(
                         rname,
                         read_termination=read_termination,
                     )
                     idn = tmp.query("*idn?")
-                except pyvisa.VisaIOError as exc:
-                    if exc.error_code == pyvisa.constants.VI_ERROR_TMO:
-                        print(f"Operation timed out for {rname}")
+                except Exception as exc:
+                    print(f"Unable to query {rname}: {exc}")
                     continue
                 finally:
                     if tmp is not None:
@@ -106,13 +121,23 @@ class InstBase:
                     )
                     return rname
         finally:
-            rm.close()
+            backend.close()
 
         return None
 
     def close(self):
-        self._inst.close()
-        return
+        resource = getattr(self, "_inst", None)
+        backend = getattr(self, "_backend", None)
+        owns_backend = getattr(self, "_owns_backend", False)
+        self._inst = []
+        self._backend = None
+        self._owns_backend = False
+        try:
+            if hasattr(resource, "close"):
+                resource.close()
+        finally:
+            if backend is not None and owns_backend:
+                backend.close()
         
     def get_idn(self):
         return self._inst.query("*IDN?")

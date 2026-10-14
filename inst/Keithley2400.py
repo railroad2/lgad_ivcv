@@ -1,5 +1,4 @@
 import numpy as np
-import pyvisa
 
 from .instbase import InstBase
 
@@ -7,6 +6,9 @@ from .instbase import InstBase
 class Keithley2400(InstBase):
     _read_termination = '\r'
     _verify_msg = ("MODEL 2400", "MODEL 2410")
+
+    _MODEL_2400_RANGES = (0.2, 2, 20, 200)
+    _MODEL_2410_RANGES = (20, 100, 1000)
 
     def __init__(self, rname=None, read_termination=None, verify_msg=None):
         if read_termination:
@@ -27,12 +29,43 @@ class Keithley2400(InstBase):
         self.write(":SENS:FUNC \"CURR\"")
         self.write(":FORM:ELEM VOLT,CURR")
 
-        self.set_voltage_range(1000)
+        self.set_voltage_range(self._voltage_ranges()[-1])
         self.set_current_limit(10E-6)
         self.sleep(0.5)
         self.set_voltage(0)
 
         return
+
+    def _is_model_2410(self):
+        return "MODEL 2410" in getattr(self, "found_idn", "").upper()
+
+    def _voltage_ranges(self):
+        if self._is_model_2410():
+            return self._MODEL_2410_RANGES
+        return self._MODEL_2400_RANGES
+
+    def get_max_source_voltage(self):
+        """Return the maximum allowed sweep magnitude for the connected model."""
+        return 1100 if self._is_model_2410() else 200
+
+    def configure_voltage_sweep(self, voltages):
+        """Validate a sweep and select the smallest suitable source range."""
+        requested = max((abs(float(voltage)) for voltage in voltages), default=0)
+        maximum = self.get_max_source_voltage()
+        if requested > maximum:
+            model = "2410" if self._is_model_2410() else "2400"
+            raise ValueError(
+                f"Keithley {model} sweep exceeds its {maximum} V limit: "
+                f"{requested} V requested"
+            )
+
+        ranges = self._voltage_ranges()
+        selected_range = next(
+            (voltage_range for voltage_range in ranges if requested <= voltage_range),
+            ranges[-1],
+        )
+        self.set_voltage_range(selected_range)
+        return selected_range
         
     ## get functions 
     def get_voltage(self):
@@ -75,23 +108,28 @@ class Keithley2400(InstBase):
         self.sleep()
         return
 
-    def set_voltage_ramp(self, v1, step=1):
-        self.sleep()
-        v0 = self.get_voltage()
-        varr = []
+    def set_voltage_ramp(self, target_voltage, step=1):
+        if not np.isfinite(step) or step <= 0:
+            raise ValueError("step must be greater than zero")
 
-        if (v1 - v0 > step):
-            varr = np.arange(v0, v1, abs(step))
+        start_voltage = self.get_voltage()
+        delta = target_voltage - start_voltage
+        if delta == 0:
+            self.set_voltage(target_voltage)
+            return
 
-        if (v0 - v1 > step):
-            varr = np.arange(v0, v1, abs(step))
-
-        for v in varr:
-            self.set_voltage(v) 
+        direction = 1 if delta > 0 else -1
+        signed_step = direction * abs(step)
+        ramp_voltages = np.arange(
+            start_voltage + signed_step,
+            target_voltage,
+            signed_step,
+        )
+        for voltage in ramp_voltages:
+            self.set_voltage(voltage)
             self.sleep()
 
-        self.set_voltage(v1)
-        return
+        self.set_voltage(target_voltage)
             
     def set_front_rear(self, opt):
         if opt.lower() == 'front':

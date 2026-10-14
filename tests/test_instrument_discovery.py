@@ -38,7 +38,7 @@ class FakeResourceManager:
 
 
 class InstrumentDiscoveryTests(unittest.TestCase):
-    def test_matching_resource_and_manager_are_closed_once(self):
+    def test_matching_resource_and_backend_are_closed_once(self):
         resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 2400")
         manager = FakeResourceManager(
             {"ASRL/dev/ttyUSB0::INSTR": resource}
@@ -46,7 +46,7 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         instrument = InstBase()
 
         with patch(
-            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            "lgad_ivcv.inst.instbase.InstrumentBackend",
             return_value=manager,
         ):
             found = instrument.find_inst(msg="MODEL 2400")
@@ -67,7 +67,7 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         instrument = InstBase()
 
         with patch(
-            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            "lgad_ivcv.inst.instbase.InstrumentBackend",
             return_value=manager,
         ):
             found = instrument.find_inst(msg="MODEL 2400")
@@ -83,7 +83,7 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         instrument = InstBase()
 
         with patch(
-            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            "lgad_ivcv.inst.instbase.InstrumentBackend",
             return_value=manager,
         ):
             found = instrument.find_inst(msg="MODEL 2400")
@@ -100,7 +100,7 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         manager = FakeResourceManager({"GPIB0::24::INSTR": resource})
 
         with patch(
-            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            "lgad_ivcv.inst.instbase.InstrumentBackend",
             return_value=manager,
         ):
             found = Keithley2400().find_inst()
@@ -113,7 +113,7 @@ class InstrumentDiscoveryTests(unittest.TestCase):
         instrument = InstBase()
 
         with patch(
-            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            "lgad_ivcv.inst.instbase.InstrumentBackend",
             return_value=manager,
         ):
             found = instrument.find_inst(msg="MODEL 2400")
@@ -129,15 +129,15 @@ class InstrumentOpenTests(unittest.TestCase):
         manager = FakeResourceManager({"GPIB0::23::INSTR": resource})
         instrument = Keithley6487()
         with patch(
-            "lgad_ivcv.inst.instbase.pyvisa.ResourceManager",
+            "lgad_ivcv.inst.instbase.InstrumentBackend",
             return_value=manager,
         ):
             instrument.open("GPIB0::23::INSTR")
-        return instrument
+        return instrument, manager
 
     def test_matching_instrument_is_opened(self):
         resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 6487,1,A\r")
-        instrument = self._open(resource)
+        instrument, manager = self._open(resource)
 
         self.assertIs(instrument._inst, resource)
         self.assertEqual(
@@ -145,6 +145,10 @@ class InstrumentOpenTests(unittest.TestCase):
             "KEITHLEY INSTRUMENTS INC.,MODEL 6487,1,A",
         )
         self.assertEqual(resource.close_count, 0)
+        self.assertEqual(manager.close_count, 0)
+        instrument.close()
+        self.assertEqual(resource.close_count, 1)
+        self.assertEqual(manager.close_count, 1)
 
     def test_other_instrument_is_rejected_and_closed(self):
         resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 2470,1,A")
@@ -159,6 +163,22 @@ class InstrumentOpenTests(unittest.TestCase):
         with self.assertRaisesRegex(InstError, "No \\*IDN\\? response"):
             self._open(resource)
         self.assertEqual(resource.close_count, 1)
+
+    def test_shared_backend_remains_open_until_its_owner_closes_it(self):
+        resource = FakeResource("KEITHLEY INSTRUMENTS INC.,MODEL 6487,1,A")
+        manager = FakeResourceManager({"GPIB0::23::INSTR": resource})
+        instrument = Keithley6487()
+
+        instrument.open(
+            "GPIB0::23::INSTR",
+            backend=manager,
+        )
+        instrument.close()
+
+        self.assertEqual(resource.close_count, 1)
+        self.assertEqual(manager.close_count, 0)
+        manager.close()
+        self.assertEqual(manager.close_count, 1)
 
 
 if __name__ == "__main__":

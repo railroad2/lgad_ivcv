@@ -1,13 +1,17 @@
-"""Run a voltage sweep using only a Keithley 2400 SMU."""
+"""Run a voltage sweep using a supported Keithley SMU."""
 
 import argparse
 import datetime
+import sys
 from pathlib import Path
 
 from matplotlib.figure import Figure
 import numpy as np
 
-from lgad_ivcv.inst import Keithley2400
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from lgad_ivcv.inst.smu import SMU_DRIVERS, open_smu
 from lgad_ivcv.ivcv.config import resolve_result_path
 
 
@@ -68,6 +72,7 @@ def measure_sweep(smu, vstart, vend, vstep, current_compliance,
 
     try:
         smu.initialize()
+        smu.configure_voltage_sweep(voltages)
         smu.set_front_rear(terminals)
         smu.set_current_limit(current_compliance)
         smu.set_voltage(0)
@@ -112,7 +117,7 @@ def linear_fit(data):
     return slope, intercept, inverse_slope
 
 
-def save_plot(data, output_path, sensor_name):
+def save_plot(data, output_path, sensor_name, instrument_name="SMU"):
     """Save a Vsmu-Ismu plot and annotate its linear-fit parameters."""
     data = np.asarray(data, dtype=float)
     vsmu = data[:, 1]
@@ -145,7 +150,7 @@ def save_plot(data, output_path, sensor_name):
         va="top",
         bbox={"boxstyle": "round", "facecolor": "white", "alpha": 0.85},
     )
-    axis.set_title(f"{sensor_name} - Keithley 2400 IV Sweep")
+    axis.set_title(f"{sensor_name} - {instrument_name} IV Sweep")
     axis.set_xlabel("Vsmu (V)")
     axis.set_ylabel("Ismu (A)")
     axis.grid(True, alpha=0.3)
@@ -157,7 +162,13 @@ def save_plot(data, output_path, sensor_name):
     return plot_path
 
 
-def save_results(data, resultpath, sensor_name, postfix=None):
+def save_results(
+    data,
+    resultpath,
+    sensor_name,
+    postfix=None,
+    instrument_name="SMU",
+):
     """Save text results and their IV plot below the standard result directory."""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%dT%H%M%S")
     safe_sensor_name = sensor_name.replace("/", "_").replace("\\", "_")
@@ -181,23 +192,41 @@ def save_results(data, resultpath, sensor_name, postfix=None):
         header="Vinput(V)\tVsmu(V)\tIsmu(A)",
         delimiter="\t",
     )
-    save_plot(data, output_path, sensor_name)
+    save_plot(data, output_path, sensor_name, instrument_name)
     return output_path
+
+
+def find_smu_resource():
+    """Return the first resource matching any supported SMU driver."""
+    for driver_class in SMU_DRIVERS:
+        resource = driver_class().find_inst()
+        if resource is not None:
+            return resource
+    return None
+
+
+def instrument_name(smu):
+    """Return a concise model name from the identity recorded by the driver."""
+    identity = getattr(smu, "found_idn", "").upper()
+    for model in ("2400", "2410", "2470"):
+        if f"MODEL {model}" in identity:
+            return f"Keithley {model}"
+    return type(smu).__name__
 
 
 def run_sweep(vstart, vend, vstep, current_compliance, resultpath,
               sensor_name, resource=None, return_sweep=False,
               terminals="rear", postfix=None):
-    """Open the Keithley 2400, run one sweep, save it, and close the VISA link."""
-    smu = Keithley2400()
+    """Open a supported SMU, run one sweep, save it, and close the link."""
     if resource is None:
         print("Looking for the SMU")
-        resource = smu.find_inst()
+        resource = find_smu_resource()
     if resource is None:
-        raise RuntimeError("Keithley 2400 SMU was not found")
+        raise RuntimeError("Keithley 2400, 2410, or 2470 SMU was not found")
 
-    smu.open(resource)
-    print(f"SMU is connected: {resource}")
+    smu = open_smu(resource)
+    model_name = instrument_name(smu)
+    print(f"{model_name} is connected: {resource}")
     try:
         data = measure_sweep(
             smu,
@@ -211,15 +240,21 @@ def run_sweep(vstart, vend, vstep, current_compliance, resultpath,
     finally:
         smu.close()
 
-    output_path = save_results(data, resultpath, sensor_name, postfix)
+    output_path = save_results(
+        data,
+        resultpath,
+        sensor_name,
+        postfix=postfix,
+        instrument_name=model_name,
+    )
     print(f"Results saved: {output_path}")
     print(f"Plot saved: {output_path.with_suffix('.png')}")
     return output_path
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Run one voltage sweep using only a Keithley 2400 SMU"
+        description="Run one voltage sweep using a Keithley 2400, 2410, or 2470"
     )
     parser.add_argument("--Vstart", type=float, default=0, help="Start voltage")
     parser.add_argument("--Vend", type=float, default=-10, help="End voltage")
@@ -241,7 +276,9 @@ def main():
         "--return_swp", action="store_true", help="Add a return sweep"
     )
     parser.add_argument(
-        "--smu", default=None, help="Keithley 2400 VISA resource"
+        "--smu",
+        default=None,
+        help="SMU resource, for example GPIB0::24::INSTR",
     )
     parser.add_argument(
         "--terminals",
@@ -256,7 +293,7 @@ def main():
         default=1e-5,
         help="SMU current compliance",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     run_sweep(
         args.Vstart,
